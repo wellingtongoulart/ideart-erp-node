@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Ideart</title>
+    <link rel="stylesheet" href="css/login.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-wrapper">
+            <!-- Logo da Empresa -->
+            <div class="logo-section">
+                <div class="logo-placeholder">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <h1>Ideart</h1>
+                <p>Sistema de Gerenciamento Empresarial</p>
+            </div>
+
+            <!-- Formulário de Login -->
+            <form class="login-form" id="loginForm">
+                <!-- Campo de Usuário -->
+                <div class="form-group">
+                    <label for="username">Nome de Usuário ou Email</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-user"></i>
+                        <input 
+                            type="text" 
+                            id="username" 
+                            name="username" 
+                            placeholder="Digite seu usuário"
+                            required
+                            autocomplete="username"
+                        >
+                    </div>
+                    <span class="error-message" id="usernameError"></span>
+                </div>
+
+                <!-- Campo de Senha -->
+                <div class="form-group">
+                    <label for="password">Senha</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-lock"></i>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            placeholder="Digite sua senha"
+                            required
+                            autocomplete="current-password"
+                        >
+                    </div>
+                    <span class="error-message" id="passwordError"></span>
+                </div>
+
+                <!-- Lembrar Credenciais -->
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input 
+                            type="checkbox" 
+                            id="rememberMe" 
+                            name="rememberMe"
+                        >
+                        <span class="checkbox-custom"></span>
+                        <span class="checkbox-text">Lembrar meu usuário</span>
+                    </label>
+                </div>
+
+                <!-- Mensagem de Erro Geral -->
+                <div class="error-alert" id="errorAlert" style="display: none;">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="errorMessage"></span>
+                </div>
+
+                <!-- Mensagem de Sucesso -->
+                <div class="success-alert" id="successAlert" style="display: none;">
+                    <i class="fas fa-check-circle"></i>
+                    <span id="successMessage"></span>
+                </div>
+
+                <!-- Botão de Login -->
+                <button type="submit" class="btn-login" id="loginBtn">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span>Entrar</span>
+                </button>
+
+                <!-- Loading Spinner -->
+                <div class="loading-spinner" id="loadingSpinner" style="display: none;">
+                    <div class="spinner"></div>
+                </div>
+            </form>
+
+            <!-- Links Adicionais -->
+            <div class="login-footer">
+                <p class="forgot-password">
+                    <a href="#forgot-password">
+                        <i class="fas fa-question-circle"></i>
+                        Esqueceu a senha?
+                    </a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/login.js"></script>
+</body>
+</html>
