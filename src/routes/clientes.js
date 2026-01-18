@@ -1,24 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const clientesController = require('../controllers/clientes.controller');
 
-router.get('/', (req, res) => {
-    res.json({ message: 'Lista de clientes', data: [] });
-});
-
-router.get('/:id', (req, res) => {
-    res.json({ message: `Cliente ${req.params.id}`, data: {} });
-});
-
-router.post('/', (req, res) => {
-    res.status(201).json({ message: 'Cliente criado com sucesso', data: req.body });
-});
-
-router.put('/:id', (req, res) => {
-    res.json({ message: `Cliente ${req.params.id} atualizado`, data: req.body });
-});
-
-router.delete('/:id', (req, res) => {
-    res.json({ message: `Cliente ${req.params.id} deletado` });
-});
+router.get('/', clientesController.listar);
+router.get('/:id', clientesController.buscarPorId);
+router.post('/', clientesController.criar);
+router.put('/:id', clientesController.atualizar);
+router.delete('/:id', clientesController.deletar);
 
 module.exports = router;

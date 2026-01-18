@@ -350,7 +350,7 @@ function initializeUserProfile() {
             // Atualizar papel/role
             const userRoleEl = getElementById('userRole');
             if (userRoleEl) {
-                userRoleEl.textContent = user.role || 'Usuário';
+                userRoleEl.textContent = user.funcao || 'Usuário';
             }
             
             // Atualizar última acesso

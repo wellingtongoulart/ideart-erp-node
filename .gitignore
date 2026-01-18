@@ -40,3 +40,7 @@ build/
 # Documentation
 documentation/
 *.md
+*.txt
+
+# Instructions
+Instructions/

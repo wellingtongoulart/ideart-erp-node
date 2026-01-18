@@ -140,9 +140,9 @@ exports.criar = async (req, res) => {
         // Inserir produto
         const skuFinal = sku || `PROD${Date.now()}`;
         const [result] = await connection.execute(
-            `INSERT INTO produtos (nome, descricao, categoria, preco_custo, preco_venda, estoque, sku, ativo, criado_em, atualizado_em)
+            `INSERT INTO produtos (nome, descricao, categoria, fornecedor, preco_custo, preco_venda, estoque, sku, ativo, criado_em, atualizado_em)
             VALUES (?, ?, ?, ?, ?, ?, ?, true, NOW(), NOW())`,
-            [nome, descricao, categoria, preco_custo, preco_venda, estoque, skuFinal]
+            [nome, descricao, categoria, fornecedor, preco_custo, preco_venda, estoque, skuFinal]
         );
 
         connection.release();
@@ -204,6 +204,11 @@ exports.atualizar = async (req, res) => {
 
         if (categoria !== undefined) {
             query += ', categoria = ?';
+            params.push(categoria);
+        }
+
+        if (categoria !== undefined) {
+            query += ', fornecedor = ?';
             params.push(categoria);
         }
 

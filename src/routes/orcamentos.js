@@ -1,24 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const orcamentosController = require('../controllers/orcamentos.controller');
 
-router.get('/', (req, res) => {
-    res.json({ message: 'Lista de orçamentos', data: [] });
-});
-
-router.get('/:id', (req, res) => {
-    res.json({ message: `Orçamento ${req.params.id}`, data: {} });
-});
-
-router.post('/', (req, res) => {
-    res.status(201).json({ message: 'Orçamento criado com sucesso', data: req.body });
-});
-
-router.put('/:id', (req, res) => {
-    res.json({ message: `Orçamento ${req.params.id} atualizado`, data: req.body });
-});
-
-router.delete('/:id', (req, res) => {
-    res.json({ message: `Orçamento ${req.params.id} deletado` });
-});
+router.get('/', orcamentosController.listar);
+router.get('/:id', orcamentosController.buscarPorId);
+router.post('/', orcamentosController.criar);
+router.put('/:id', orcamentosController.atualizar);
+router.delete('/:id', orcamentosController.deletar);
 
 module.exports = router;

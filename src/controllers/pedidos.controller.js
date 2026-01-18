@@ -436,3 +436,59 @@ exports.relatorio = async (req, res) => {
         });
     }
 };
+
+// DELETE - Deletar pedido completamente
+exports.deletar = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const connection = await pool.getConnection();
+
+        try {
+            await connection.beginTransaction();
+
+            // Buscar pedido
+            const [pedidos] = await connection.execute(
+                'SELECT * FROM pedidos WHERE id = ?',
+                [id]
+            );
+
+            if (pedidos.length === 0) {
+                connection.release();
+                return res.status(404).json({
+                    sucesso: false,
+                    mensagem: 'Pedido não encontrado'
+                });
+            }
+
+            // Deletar itens do pedido
+            await connection.execute(
+                'DELETE FROM pedido_itens WHERE pedido_id = ?',
+                [id]
+            );
+
+            // Deletar pedido
+            await connection.execute(
+                'DELETE FROM pedidos WHERE id = ?',
+                [id]
+            );
+
+            await connection.commit();
+            connection.release();
+
+            res.json({
+                sucesso: true,
+                mensagem: 'Pedido deletado com sucesso'
+            });
+        } catch (erro) {
+            await connection.rollback();
+            connection.release();
+            throw erro;
+        }
+    } catch (erro) {
+        res.status(500).json({
+            sucesso: false,
+            mensagem: 'Erro ao deletar pedido',
+            erro: erro.message
+        });
+    }
+};

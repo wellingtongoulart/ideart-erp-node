@@ -24,6 +24,7 @@ const produtosPage = {
                             <th>ID</th>
                             <th>Nome</th>
                             <th>Categoria</th>
+                            <th>Fornecedor</th>
                             <th>Preço</th>
                             <th>Estoque</th>
                             <th>Ações</th>
@@ -77,11 +78,16 @@ const produtosPage = {
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <label for="produtoEstoque">Estoque</label>
-                            <input type="number" id="produtoEstoque" name="estoque" min="0" value="0" placeholder="0">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="produtoFornecedor">Fornecedor</label>
+                                <input type="text" id="produtoFornecedor" name="fornecedor" placeholder="Ex: Samsung">
+                            </div>
+                            <div class="form-group">
+                                <label for="produtoEstoque">Estoque</label>
+                                <input type="number" id="produtoEstoque" name="estoque" min="0" value="0" placeholder="0">
+                            </div>
                         </div>
-
                         <div class="form-group checkbox">
                             <input type="checkbox" id="produtoAtivo" name="ativo" checked>
                             <label for="produtoAtivo">Produto Ativo</label>
@@ -110,6 +116,7 @@ function inicializarProdutos() {
     const cancelarProdutoBtn = document.getElementById('cancelarProdutoBtn');
     const salvarProdutoBtn = document.getElementById('salvarProdutoBtn');
     const modalNovoProduto = document.getElementById('modalNovoProduto');
+    const buscaBtns = document.querySelectorAll('button:has(i.fa-search)');
 
     // Carregar lista de produtos
     carregarProdutos();
@@ -118,6 +125,11 @@ function inicializarProdutos() {
     if (novoProdutoBtn) {
         novoProdutoBtn.addEventListener('click', abrirModalNovoProduto);
     }
+
+    // Buscar produtos
+    buscaBtns.forEach(btn => {
+        btn.addEventListener('click', abrirBuscaProdutos);
+    });
 
     // Fechar modal
     if (fecharModalBtn) {
@@ -162,6 +174,7 @@ function carregarProdutos() {
                         <td>${produto.id}</td>
                         <td>${produto.nome}</td>
                         <td>${produto.categoria || '-'}</td>
+                        <td>${produto.fornecedor || '-'}</td>
                         <td>R$ ${parseFloat(produto.preco_venda).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td>${produto.estoque}</td>
                         <td>
@@ -189,7 +202,7 @@ function carregarProdutos() {
 function abrirModalNovoProduto() {
     const modal = document.getElementById('modalNovoProduto');
     const form = document.getElementById('formNovoProduto');
-    
+
     if (form) {
         form.reset();
     }
@@ -226,6 +239,7 @@ function salvarNovoProduto(e) {
     const descricao = document.getElementById('produtoDescricao').value.trim();
     const preco_custo = parseFloat(document.getElementById('produtoPrecoCusto').value) || 0;
     const preco_venda = parseFloat(document.getElementById('produtoPrecoVenda').value);
+    const fornecedor = document.getElementById('produtoFornecedor').value.trim();
     const estoque = parseInt(document.getElementById('produtoEstoque').value) || 0;
 
     // Validação
@@ -251,6 +265,7 @@ function salvarNovoProduto(e) {
         descricao,
         preco_custo,
         preco_venda,
+        fornecedor,
         estoque,
         ativo: document.getElementById('produtoAtivo').checked
     };
@@ -266,7 +281,7 @@ function salvarNovoProduto(e) {
         .then(data => {
             if (data.sucesso) {
                 mostrarMensagemProduto('Produto criado com sucesso!', 'sucesso');
-                
+
                 setTimeout(() => {
                     fecharModalProduto();
                     carregarProdutos();
@@ -289,7 +304,7 @@ function salvarNovoProduto(e) {
  * Edita um produto existente
  */
 function editarProduto(id) {
-    alert('Funcionalidade de edição em desenvolvimento! Produto ID: ' + id);
+    abrirEdicao('produto', id);
 }
 
 /**
@@ -337,4 +352,39 @@ function limparMensagemProduto() {
         messageEl.style.display = 'none';
         messageEl.textContent = '';
     }
+}
+
+/**
+ * Abre o modal de busca de produtos
+ */
+function abrirBuscaProdutos() {
+    if (!window.buscaProdutos) {
+        window.buscaProdutos = new BuscaAvancada({
+            endpoint: '/api/produtos',
+            titulo: 'Buscar Produtos',
+            campos: ['nome', 'categoria', 'sku'],
+            onResultado: (produto) => {
+                // Scroll até a tabela
+                const table = document.getElementById('produtosTable');
+                if (table) {
+                    table.scrollIntoView({ behavior: 'smooth' });
+
+                    // Destaca a linha do produto encontrado
+                    setTimeout(() => {
+                        const linhas = document.querySelectorAll('#produtosTbody tr');
+                        linhas.forEach(linha => {
+                            const idCell = linha.querySelector('td:first-child');
+                            if (idCell && idCell.textContent == produto.id) {
+                                linha.style.background = '#fff9c4';
+                                setTimeout(() => {
+                                    linha.style.background = '';
+                                }, 3000);
+                            }
+                        });
+                    }, 500);
+                }
+            }
+        });
+    }
+    window.buscaProdutos.abrir();
 }

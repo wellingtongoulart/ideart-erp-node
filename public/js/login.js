@@ -80,12 +80,12 @@ function loadSavedCredentials() {
         const savedCredentials = localStorage.getItem(LOGIN_CONFIG.storageKey);
         if (savedCredentials) {
             const credentials = JSON.parse(atob(savedCredentials)); // Decodificar
-            
+
             // Verificar se as credenciais não expiraram
             if (credentials.expiresAt && new Date(credentials.expiresAt) > new Date()) {
                 usernameInput.value = credentials.username;
                 rememberMeCheckbox.checked = true;
-                
+
                 // Focar no campo de senha para o usuário digitar
                 passwordInput.focus();
             } else {
@@ -157,7 +157,8 @@ function validateForm() {
 // Mostrar erro
 function showError(element, message) {
     element.textContent = message;
-    element.classList.add('show');
+    // element.classList.add('show');
+    console.log('Erro exibido:', message);
 }
 
 // Esconder erro
@@ -250,78 +251,61 @@ async function handleLogin(e) {
     showLoading(true);
     loginBtn.disabled = true;
 
-    try {
-        const username = usernameInput.value.trim();
-        const password = passwordInput.value;
-        const rememberMe = rememberMeCheckbox.checked;
 
-        // Simular requisição ao servidor
-        // Em produção, seria uma requisição real à API
-        const response = await performLogin(username, password);
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+    const rememberMe = rememberMeCheckbox.checked;
 
-        if (response.success) {
-            // Salvar credenciais se marcou "lembrar"
-            saveCredentials(username, rememberMe);
+    // Simular requisição ao servidor
+    // Em produção, seria uma requisição real à API
+    const response = await performLogin(username, password);
 
-            // Criar sessão
-            createSession(response.user);
-
-            // Mostrar mensagem de sucesso
-            showSuccessAlert('Login realizado com sucesso! Redirecionando...');
-
-            // Aguardar um pouco e redirecionar
-            setTimeout(() => {
-                redirectToHome();
-            }, 1500);
-        } else {
-            // Falha no login
-            handleLoginFailure(response.message);
-        }
-    } catch (error) {
-        console.error('Erro ao fazer login:', error);
-        showErrorAlert('Erro ao conectar ao servidor. Tente novamente.');
-    } finally {
-        showLoading(false);
-        loginBtn.disabled = false;
-    }
 }
 
 // Simular requisição de login (Em produção, seria uma requisição real)
 async function performLogin(username, password) {
-    // Simular delay de rede
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'Entrando...';
+    const dados = { username, password };
 
-    // Credenciais de teste (para demonstração)
-    const validCredentials = [
-        { username: 'admin', password: '123456' },
-        { username: 'user@email.com', password: 'senha123' },
-        { username: 'usuario', password: 'password' }
-    ];
+    fetch('/api/autenticacao/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados)
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.sucesso) {
+                sessionStorage.setItem('user_token', data.token);
+                sessionStorage.setItem('user', JSON.stringify(data.usuario));
 
-    // Verificar credenciais
-    const isValid = validCredentials.some(cred =>
-        cred.username === username && cred.password === password
-    );
+                // Salvar credenciais se marcou "lembrar"
+                saveCredentials(username, rememberMe);
 
-    if (isValid) {
-        loginState.attempts = 0;
-        return {
-            success: true,
-            user: {
-                id: 1,
-                username: username,
-                email: username.includes('@') ? username : `${username}@ideart.com`,
-                name: username.charAt(0).toUpperCase() + username.slice(1),
-                role: 'admin',
-                avatar: `https://ui-avatars.com/api/?name=${username}&background=0066cc&color=fff`
+                // Criar sessão
+                createSession(data.usuario);
+                // Mostrar mensagem de sucesso
+                showSuccessAlert('Login realizado com sucesso! Redirecionando...');
+
+                // Aguardar um pouco e redirecionar
+                setTimeout(() => {
+                    redirectToHome();
+                }, 1000);
+
+            } else {
+                showErrorAlert(data.mensagem || 'Falha no login');
+                handleLoginFailure(data.message);
             }
-        };
-    } else {
-        return {
-            success: false,
-            message: 'Usuário ou senha inválidos'
-        };
-    }
+        })
+        .catch(error => {
+            showErrorAlert('Erro ao conectar. Tente novamente.');
+            console.error('Erro:', error);
+        })
+        .finally(() => {
+            showLoading(false);
+            loginBtn.disabled = false;
+            loginBtn.textContent = 'Entrar';
+        });
 }
 
 // Handle falha de login
@@ -354,20 +338,20 @@ function createSession(user) {
         createdAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() // 8 horas
     };
-    
+
     sessionStorage.setItem(LOGIN_CONFIG.sessionKey, JSON.stringify(session));
-    
+
     // Salvar dados do usuário também em localStorage para disponibilidade entre abas
     const userData = {
         id: user.id,
         username: user.username,
         email: user.email,
         name: user.name,
-        role: user.role,
+        role: user.funcao,
         avatar: user.avatar,
         lastAccess: new Date().toISOString()
     };
-    
+
     localStorage.setItem('ideart_user', JSON.stringify(userData));
 }
 
