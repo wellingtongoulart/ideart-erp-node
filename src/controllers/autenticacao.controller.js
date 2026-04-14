@@ -1,5 +1,6 @@
 const pool = require('../config/database');
 const crypto = require('crypto');
+const bcrypt = require('bcrypt');
 
 // ===== LOGIN =====
 async function login(req, res) {
@@ -31,9 +32,13 @@ async function login(req, res) {
         }
 
         const usuario = usuarios[0];
+        console.log('Usuário encontrado:', usuario.username);
 
-        // Comparação simples de senha
-        if (usuario.senha !== password) {
+        // Comparação de senha usando bcrypt
+        const senhaCorreta = await bcrypt.compare(password, usuario.senha);
+        
+        if (!senhaCorreta) {
+            console.log('Senha incorreta para o usuário:', username);
             return res.status(401).json({
                 sucesso: false,
                 mensagem: 'Usuário ou senha incorretos'
@@ -55,9 +60,11 @@ async function login(req, res) {
             }
         });
     } catch (erro) {
+        console.error('ERRO NO LOGIN:', erro);
         return res.status(500).json({
             sucesso: false,
-            mensagem: 'Erro ao processar login'
+            mensagem: 'Erro ao processar login',
+            detalhes: erro.message
         });
     }
 }
