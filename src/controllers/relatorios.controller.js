@@ -20,7 +20,7 @@ exports.vendas = async (req, res) => {
             params.push(data_fim);
         }
 
-        query += ' GROUP BY DATE(p.data_pedido) ORDER BY p.data_pedido DESC';
+        query += ' GROUP BY DATE(p.data_pedido) ORDER BY data DESC';
 
         const [vendas] = await connection.execute(query, params);
         connection.release();

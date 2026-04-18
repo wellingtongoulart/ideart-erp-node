@@ -31,7 +31,7 @@ exports.listar = async (req, res) => {
         query += ' ORDER BY criado_em DESC LIMIT ? OFFSET ?';
         params.push(parseInt(limite), offset);
 
-        const [clientes] = await connection.execute(query, params);
+        const [clientes] = await connection.query(query, params);
         connection.release();
 
         res.json({
@@ -175,11 +175,19 @@ exports.atualizar = async (req, res) => {
             }
         }
 
-        await connection.execute(
-            `UPDATE clientes SET nome = ?, email = ?, telefone = ?, endereco = ?, cidade = ?, estado = ?, cep = ?, atualizado_em = NOW()
-            WHERE id = ?`,
-            [nome || null, email || null, telefone || null, endereco || null, cidade || null, estado || null, cep || null, id]
-        );
+        let query = 'UPDATE clientes SET atualizado_em = NOW()';
+        const params = [];
+        if (nome !== undefined)     { query += ', nome = ?';     params.push(nome); }
+        if (email !== undefined)    { query += ', email = ?';    params.push(email); }
+        if (telefone !== undefined) { query += ', telefone = ?'; params.push(telefone); }
+        if (endereco !== undefined) { query += ', endereco = ?'; params.push(endereco); }
+        if (cidade !== undefined)   { query += ', cidade = ?';   params.push(cidade); }
+        if (estado !== undefined)   { query += ', estado = ?';   params.push(estado); }
+        if (cep !== undefined)      { query += ', cep = ?';      params.push(cep); }
+        query += ' WHERE id = ?';
+        params.push(id);
+
+        await connection.execute(query, params);
 
         connection.release();
 
