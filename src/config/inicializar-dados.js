@@ -18,6 +18,76 @@ async function garantirTabelaRecuperacaoSenha(connection) {
     `);
 }
 
+// Adiciona coluna somente se não existir (compatível com MySQL < 8.0.21)
+async function garantirColuna(connection, tabela, coluna, definicao) {
+    const [rows] = await connection.execute(
+        `SELECT COUNT(*) AS existe FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+        [tabela, coluna]
+    );
+    if (rows[0].existe === 0) {
+        await connection.query(`ALTER TABLE ${tabela} ADD COLUMN ${coluna} ${definicao}`);
+        console.log(`✓ Coluna adicionada: ${tabela}.${coluna}`);
+    }
+}
+
+async function migrarOrcamentosPedidosV2(connection) {
+    // Orcamentos — campos extras
+    await garantirColuna(connection, 'orcamentos', 'profissional_id', 'INT NULL');
+    await garantirColuna(connection, 'orcamentos', 'forma_pagamento', 'VARCHAR(50) NULL');
+    await garantirColuna(connection, 'orcamentos', 'assinatura', 'VARCHAR(255) NULL');
+    await garantirColuna(connection, 'orcamentos', 'pedido_id', 'INT NULL');
+
+    // Ampliar status para incluir 'expirado'
+    try {
+        await connection.query(`ALTER TABLE orcamentos
+            MODIFY COLUMN status ENUM('pendente','aprovado','recusado','expirado','convertido') DEFAULT 'pendente'`);
+    } catch (_) { /* pode já estar correto */ }
+
+    // orcamento_itens — campos extras e produto_id opcional
+    await garantirColuna(connection, 'orcamento_itens', 'nome_customizado', 'VARCHAR(255) NULL');
+    await garantirColuna(connection, 'orcamento_itens', 'descricao_customizada', 'TEXT NULL');
+    await garantirColuna(connection, 'orcamento_itens', 'ordem', 'INT DEFAULT 0');
+    try { await connection.query(`ALTER TABLE orcamento_itens MODIFY COLUMN produto_id INT NULL`); } catch (_) {}
+
+    // pedidos — campos extras
+    await garantirColuna(connection, 'pedidos', 'orcamento_id', 'INT NULL');
+    await garantirColuna(connection, 'pedidos', 'forma_pagamento', 'VARCHAR(50) NULL');
+
+    // pedido_itens — campos extras e produto_id opcional
+    await garantirColuna(connection, 'pedido_itens', 'nome_customizado', 'VARCHAR(255) NULL');
+    await garantirColuna(connection, 'pedido_itens', 'descricao_customizada', 'TEXT NULL');
+    await garantirColuna(connection, 'pedido_itens', 'ordem', 'INT DEFAULT 0');
+    try { await connection.query(`ALTER TABLE pedido_itens MODIFY COLUMN produto_id INT NULL`); } catch (_) {}
+
+    // Tabela de configuração da empresa (cabeçalho do PDF)
+    await connection.query(`
+        CREATE TABLE IF NOT EXISTS empresa_config (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            nome_fantasia VARCHAR(255) NOT NULL,
+            razao_social VARCHAR(255),
+            cnpj VARCHAR(20),
+            email VARCHAR(255),
+            telefone VARCHAR(20),
+            endereco VARCHAR(255),
+            cidade VARCHAR(100),
+            estado VARCHAR(2),
+            logo_url VARCHAR(500),
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+    `);
+
+    const [empresas] = await connection.execute('SELECT COUNT(*) AS total FROM empresa_config');
+    if (empresas[0].total === 0) {
+        await connection.execute(
+            `INSERT INTO empresa_config (nome_fantasia, razao_social, email, telefone, endereco, cidade, estado)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            ['Ideart', 'Ideart Comércio Ltda.', 'contato@ideart.com.br', '(11) 0000-0000', 'Endereço da empresa', 'São Paulo', 'SP']
+        );
+    }
+}
+
 async function inicializarDadosExemplo() {
     try {
         const connection = await pool.getConnection();
@@ -26,6 +96,12 @@ async function inicializarDadosExemplo() {
             await garantirTabelaRecuperacaoSenha(connection);
         } catch (e) {
             console.warn('⚠ Não foi possível garantir a tabela de recuperação de senha:', e.message);
+        }
+
+        try {
+            await migrarOrcamentosPedidosV2(connection);
+        } catch (e) {
+            console.warn('⚠ Não foi possível aplicar migração de orçamentos/pedidos:', e.message);
         }
 
         // Verificar se já existem produtos

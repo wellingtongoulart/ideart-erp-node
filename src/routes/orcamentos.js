@@ -8,38 +8,6 @@ const orcamentosController = require('../controllers/orcamentos.controller');
  *   get:
  *     tags: [Orcamentos]
  *     summary: Lista orçamentos com paginação e filtros
- *     parameters:
- *       - in: query
- *         name: pagina
- *         schema: { type: integer, default: 1 }
- *         description: Página atual (inicia em 1)
- *       - in: query
- *         name: limite
- *         schema: { type: integer, default: 10 }
- *         description: Quantidade de registros por página
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [pendente, aprovado, recusado, expirado]
- *         description: Filtrar por status do orçamento
- *       - in: query
- *         name: cliente_id
- *         schema: { type: integer }
- *         description: Filtrar orçamentos de um cliente específico
- *     responses:
- *       200:
- *         description: Orçamentos listados com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ListaOrcamentosResponse'
- *       500:
- *         description: Erro ao listar orçamentos
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErroResposta'
  */
 router.get('/', orcamentosController.listar);
 
@@ -48,66 +16,25 @@ router.get('/', orcamentosController.listar);
  * /api/orcamentos/{id}:
  *   get:
  *     tags: [Orcamentos]
- *     summary: Busca um orçamento pelo ID
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema: { type: integer }
- *         description: ID do orçamento
- *     responses:
- *       200:
- *         description: Orçamento encontrado
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/OrcamentoResponse'
- *       404:
- *         description: Orçamento não encontrado
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErroResposta'
- *       500:
- *         description: Erro ao buscar orçamento
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErroResposta'
+ *     summary: Busca um orçamento pelo ID com itens
  */
 router.get('/:id', orcamentosController.buscarPorId);
+
+/**
+ * @openapi
+ * /api/orcamentos/{id}/exportacao:
+ *   get:
+ *     tags: [Orcamentos]
+ *     summary: Retorna dados consolidados para exportação (cabeçalho empresa + cliente + itens)
+ */
+router.get('/:id/exportacao', orcamentosController.dadosExportacao);
 
 /**
  * @openapi
  * /api/orcamentos:
  *   post:
  *     tags: [Orcamentos]
- *     summary: Cria um novo orçamento
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/OrcamentoInput'
- *     responses:
- *       201:
- *         description: Orçamento criado com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/OrcamentoCriadoResponse'
- *       400:
- *         description: Número e cliente obrigatórios, ou número já existente
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErroResposta'
- *       500:
- *         description: Erro ao criar orçamento
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErroResposta'
+ *     summary: Cria um novo orçamento com itens
  */
 router.post('/', orcamentosController.criar);
 
@@ -116,40 +43,27 @@ router.post('/', orcamentosController.criar);
  * /api/orcamentos/{id}:
  *   put:
  *     tags: [Orcamentos]
- *     summary: Atualiza um orçamento existente
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema: { type: integer }
- *         description: ID do orçamento
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/OrcamentoInput'
- *     responses:
- *       200:
- *         description: Orçamento atualizado com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/RespostaSucesso'
- *       404:
- *         description: Orçamento não encontrado
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErroResposta'
- *       500:
- *         description: Erro ao atualizar orçamento
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErroResposta'
+ *     summary: Atualiza um orçamento existente (com itens)
  */
 router.put('/:id', orcamentosController.atualizar);
+
+/**
+ * @openapi
+ * /api/orcamentos/{id}/aprovar:
+ *   post:
+ *     tags: [Orcamentos]
+ *     summary: Aprova o orçamento e gera um pedido vinculado
+ */
+router.post('/:id/aprovar', orcamentosController.aprovar);
+
+/**
+ * @openapi
+ * /api/orcamentos/{id}/recusar:
+ *   post:
+ *     tags: [Orcamentos]
+ *     summary: Recusa o orçamento
+ */
+router.post('/:id/recusar', orcamentosController.recusar);
 
 /**
  * @openapi
@@ -157,31 +71,6 @@ router.put('/:id', orcamentosController.atualizar);
  *   delete:
  *     tags: [Orcamentos]
  *     summary: Remove um orçamento
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema: { type: integer }
- *         description: ID do orçamento
- *     responses:
- *       200:
- *         description: Orçamento deletado com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/RespostaSucesso'
- *       404:
- *         description: Orçamento não encontrado
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErroResposta'
- *       500:
- *         description: Erro ao deletar orçamento
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErroResposta'
  */
 router.delete('/:id', orcamentosController.deletar);
 

@@ -76,12 +76,14 @@ exports.buscarPorId = async (req, res) => {
         const { id } = req.params;
         const connection = await pool.getConnection();
 
-        // Buscar pedido
         const [pedidos] = await connection.execute(
-            `SELECT p.*, c.nome as cliente_nome, c.email as cliente_email, c.telefone as cliente_telefone, c.endereco
-            FROM pedidos p
-            LEFT JOIN clientes c ON p.cliente_id = c.id
-            WHERE p.id = ?`,
+            `SELECT p.*,
+                    c.nome AS cliente_nome, c.email AS cliente_email, c.telefone AS cliente_telefone, c.endereco,
+                    o.numero AS orcamento_numero
+             FROM pedidos p
+             LEFT JOIN clientes c ON p.cliente_id = c.id
+             LEFT JOIN orcamentos o ON p.orcamento_id = o.id
+             WHERE p.id = ?`,
             [id]
         );
 
@@ -95,20 +97,22 @@ exports.buscarPorId = async (req, res) => {
 
         const pedido = pedidos[0];
 
-        // Buscar itens do pedido
         const [itens] = await connection.execute(
-            `SELECT pi.*, pr.nome as produto_nome, pr.descricao
-            FROM pedido_itens pi
-            LEFT JOIN produtos pr ON pi.produto_id = pr.id
-            WHERE pi.pedido_id = ?`,
+            `SELECT pi.*, pr.nome AS produto_nome, pr.sku, pr.categoria, pr.descricao AS produto_descricao
+             FROM pedido_itens pi
+             LEFT JOIN produtos pr ON pi.produto_id = pr.id
+             WHERE pi.pedido_id = ?
+             ORDER BY pi.ordem ASC, pi.id ASC`,
             [id]
         );
 
-        // Buscar informações de logística se existirem
-        const [logistica] = await connection.execute(
-            `SELECT * FROM logistica WHERE pedido_id = ?`,
-            [id]
-        );
+        let logistica = [];
+        try {
+            [logistica] = await connection.execute(
+                `SELECT * FROM logistica WHERE pedido_id = ?`,
+                [id]
+            );
+        } catch (_) { /* tabela opcional */ }
 
         connection.release();
 
@@ -133,21 +137,23 @@ exports.buscarPorId = async (req, res) => {
 // POST - Criar novo pedido
 exports.criar = async (req, res) => {
     try {
-        const { cliente_id, data_pedido, data_entrega_prevista, itens = [], desconto = 0, observacoes = '' } = req.body;
+        const {
+            cliente_id,
+            data_pedido,
+            data_entrega_prevista,
+            itens = [],
+            desconto = 0,
+            observacoes = '',
+            forma_pagamento = '',
+            orcamento_id = null
+        } = req.body;
 
-        // Validação básica
         if (!cliente_id) {
-            return res.status(400).json({
-                sucesso: false,
-                mensagem: 'Cliente é obrigatório'
-            });
+            return res.status(400).json({ sucesso: false, mensagem: 'Cliente é obrigatório' });
         }
 
         if (!Array.isArray(itens) || itens.length === 0) {
-            return res.status(400).json({
-                sucesso: false,
-                mensagem: 'Pedido deve conter pelo menos um item'
-            });
+            return res.status(400).json({ sucesso: false, mensagem: 'Pedido deve conter pelo menos um item' });
         }
 
         const connection = await pool.getConnection();
@@ -155,40 +161,46 @@ exports.criar = async (req, res) => {
         try {
             await connection.beginTransaction();
 
-            // Gerar número do pedido único (PED + timestamp)
             const numero = `PED${Date.now()}`;
-            
-            // Calcular valor total
+
             let valor_total = 0;
             for (const item of itens) {
-                valor_total += (item.quantidade * item.preco_unitario);
+                valor_total += (Number(item.quantidade) || 0) * (Number(item.preco_unitario) || 0);
             }
-            valor_total -= desconto;
 
-            // Inserir pedido
             const [resultPedido] = await connection.execute(
-                `INSERT INTO pedidos (numero, cliente_id, data_pedido, data_entrega_prevista, valor_total, desconto, status, observacoes, criado_em, atualizado_em)
-                VALUES (?, ?, ?, ?, ?, ?, 'pendente', ?, NOW(), NOW())`,
-                [numero, cliente_id, data_pedido || new Date().toISOString().split('T')[0], data_entrega_prevista || null, valor_total, desconto, observacoes]
+                `INSERT INTO pedidos
+                 (numero, cliente_id, orcamento_id, data_pedido, data_entrega_prevista, valor_total, desconto, status, observacoes, forma_pagamento, criado_em, atualizado_em)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente', ?, ?, NOW(), NOW())`,
+                [
+                    numero, cliente_id, orcamento_id,
+                    data_pedido || new Date().toISOString().split('T')[0],
+                    data_entrega_prevista || null,
+                    valor_total, desconto, observacoes, forma_pagamento
+                ]
             );
 
             const pedido_id = resultPedido.insertId;
 
-            // Inserir itens do pedido
-            for (const item of itens) {
-                const subtotal = item.quantidade * item.preco_unitario;
-                
+            for (let i = 0; i < itens.length; i++) {
+                const item = itens[i];
+                const qtd = Number(item.quantidade) || 0;
+                const preco = Number(item.preco_unitario) || 0;
+                const subtotal = qtd * preco;
+
                 await connection.execute(
-                    `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, preco_unitario, subtotal, criado_em)
-                    VALUES (?, ?, ?, ?, ?, NOW())`,
-                    [pedido_id, item.produto_id, item.quantidade, item.preco_unitario, subtotal]
+                    `INSERT INTO pedido_itens
+                     (pedido_id, produto_id, nome_customizado, descricao_customizada, quantidade, preco_unitario, subtotal, ordem, criado_em)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+                    [pedido_id, item.produto_id || null, item.nome_customizado || null, item.descricao_customizada || null, qtd, preco, subtotal, i]
                 );
 
-                // Atualizar estoque do produto (diminuir)
-                await connection.execute(
-                    `UPDATE produtos SET estoque = estoque - ? WHERE id = ?`,
-                    [item.quantidade, item.produto_id]
-                );
+                if (item.produto_id) {
+                    await connection.execute(
+                        `UPDATE produtos SET estoque = estoque - ? WHERE id = ?`,
+                        [qtd, item.produto_id]
+                    );
+                }
             }
 
             await connection.commit();
@@ -197,11 +209,7 @@ exports.criar = async (req, res) => {
             res.status(201).json({
                 sucesso: true,
                 mensagem: 'Pedido criado com sucesso',
-                dados: {
-                    id: pedido_id,
-                    numero: numero,
-                    valor_total: valor_total
-                }
+                dados: { id: pedido_id, numero, valor_total }
             });
         } catch (erro) {
             await connection.rollback();
@@ -209,11 +217,7 @@ exports.criar = async (req, res) => {
             throw erro;
         }
     } catch (erro) {
-        res.status(500).json({
-            sucesso: false,
-            mensagem: 'Erro ao criar pedido',
-            erro: erro.message
-        });
+        res.status(500).json({ sucesso: false, mensagem: 'Erro ao criar pedido', erro: erro.message });
     }
 };
 
