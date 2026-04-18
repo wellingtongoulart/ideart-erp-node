@@ -35,11 +35,13 @@ const relatoriosPage = {
                     <h3>Clientes</h3>
                     <p>Base de clientes e análise</p>
                 </div>
+                <!-- TODO: Relatório de Logística desabilitado — reativar quando solicitado.
                 <div class="grid-item" onclick="abrirRelatorioLogistica()">
                     <i class="fas fa-truck"></i>
                     <h3>Logística</h3>
                     <p>Acompanhamento de entregas</p>
                 </div>
+                -->
             </div>
 
             <!-- Seção para exibir relatório detalhado -->
@@ -132,24 +134,22 @@ function abrirRelatorioClientes() {
         });
 }
 
-/**
- * Abre relatório de logística
- */
-function abrirRelatorioLogistica() {
-    fetch('/api/relatorios/logistica')
-        .then(response => response.json())
-        .then(data => {
-            if (data.sucesso) {
-                exibirRelatorio('Relatório de Logística', data.dados);
-            } else {
-                alert('Erro ao carregar relatório de logística');
-            }
-        })
-        .catch(erro => {
-            console.error('Erro:', erro);
-            alert('Erro ao carregar relatório');
-        });
-}
+// TODO: Relatório de Logística desabilitado — reativar quando solicitado.
+// function abrirRelatorioLogistica() {
+//     fetch('/api/relatorios/logistica')
+//         .then(response => response.json())
+//         .then(data => {
+//             if (data.sucesso) {
+//                 exibirRelatorio('Relatório de Logística', data.dados);
+//             } else {
+//                 alert('Erro ao carregar relatório de logística');
+//             }
+//         })
+//         .catch(erro => {
+//             console.error('Erro:', erro);
+//             alert('Erro ao carregar relatório');
+//         });
+// }
 
 /**
  * Exibe um relatório na página
