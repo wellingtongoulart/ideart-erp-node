@@ -3,8 +3,10 @@
  * Gerenciamento de produtos do sistema
  */
 
-// Configuração da página de produtos
-const produtosPage = {
+import { abrirEdicao } from '../edit-modal.js';
+import { BuscaAvancada } from '../busca-avancada.js';
+
+export const produtosPage = {
     title: 'Produtos',
     content: `
         <div class="card">
@@ -110,7 +112,7 @@ const produtosPage = {
 /**
  * Inicializa a página de produtos
  */
-function inicializarProdutos() {
+export function inicializarProdutos() {
     const novoProdutoBtn = document.getElementById('novoProdutoBtn');
     const fecharModalBtn = document.getElementById('fecharModalBtn');
     const cancelarProdutoBtn = document.getElementById('cancelarProdutoBtn');
@@ -303,14 +305,14 @@ function salvarNovoProduto(e) {
 /**
  * Edita um produto existente
  */
-function editarProduto(id) {
+export function editarProduto(id) {
     abrirEdicao('produto', id);
 }
 
 /**
  * Deleta um produto
  */
-function deletarProduto(id) {
+export function deletarProduto(id) {
     if (confirm('Tem certeza que deseja deletar este produto?')) {
         fetch(`/api/produtos/${id}`, {
             method: 'DELETE'
@@ -388,3 +390,7 @@ function abrirBuscaProdutos() {
     }
     window.buscaProdutos.abrir();
 }
+
+// Handlers chamados via onclick="..." inline nos templates HTML
+window.editarProduto = editarProduto;
+window.deletarProduto = deletarProduto;

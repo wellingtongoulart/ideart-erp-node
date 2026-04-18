@@ -3,7 +3,10 @@
  * Visualização e geração de relatórios
  */
 
-const relatoriosPage = {
+import { mostrarAviso } from '../utils.js';
+import { BuscaAvancada } from '../busca-avancada.js';
+
+export const relatoriosPage = {
     title: 'Relatórios',
     content: `
         <div class="card">
@@ -56,7 +59,7 @@ const relatoriosPage = {
 /**
  * Inicializa a página de relatórios
  */
-function inicializarRelatorios() {
+export function inicializarRelatorios() {
     const gerarRelatorioBtn = document.getElementById('gerarRelatorioBtn');
     const exportarExcelBtn = document.getElementById('exportarExcelBtn');
     const buscaBtns = document.querySelectorAll('button:has(i.fa-search)');
@@ -80,7 +83,7 @@ function inicializarRelatorios() {
 /**
  * Abre relatório de vendas
  */
-function abrirRelatorioVendas() {
+export function abrirRelatorioVendas() {
     fetch('/api/relatorios/vendas')
         .then(response => response.json())
         .then(data => {
@@ -99,7 +102,7 @@ function abrirRelatorioVendas() {
 /**
  * Abre relatório de produtos/estoque
  */
-function abrirRelatorioProdutos() {
+export function abrirRelatorioProdutos() {
     fetch('/api/relatorios/produtos')
         .then(response => response.json())
         .then(data => {
@@ -118,7 +121,7 @@ function abrirRelatorioProdutos() {
 /**
  * Abre relatório de clientes
  */
-function abrirRelatorioClientes() {
+export function abrirRelatorioClientes() {
     fetch('/api/relatorios/clientes')
         .then(response => response.json())
         .then(data => {
@@ -227,3 +230,8 @@ function abrirBuscaRelatorios() {
     }
     window.buscaRelatorios.abrir();
 }
+
+// Handlers chamados via onclick="..." inline nos templates HTML
+window.abrirRelatorioVendas = abrirRelatorioVendas;
+window.abrirRelatorioProdutos = abrirRelatorioProdutos;
+window.abrirRelatorioClientes = abrirRelatorioClientes;

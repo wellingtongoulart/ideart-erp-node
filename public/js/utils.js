@@ -7,7 +7,7 @@
 // CONFIGURAÇÕES
 // ============================================
 
-const APP_CONFIG = {
+export const APP_CONFIG = {
     sessionKey: 'ideart_session',
     userKey: 'ideart_user',
     sidebarMinimized: 'ideart_sidebar_minimized'
@@ -17,7 +17,7 @@ const APP_CONFIG = {
 // FUNÇÕES DE USUÁRIO
 // ============================================
 
-function getCurrentUser() {
+export function getCurrentUser() {
     try {
         const userStr = localStorage.getItem(APP_CONFIG.userKey);
         return userStr ? JSON.parse(userStr) : null;
@@ -27,7 +27,7 @@ function getCurrentUser() {
     }
 }
 
-function isUserLoggedIn() {
+export function isUserLoggedIn() {
     return sessionStorage.getItem(APP_CONFIG.sessionKey) !== null;
 }
 
@@ -35,7 +35,7 @@ function isUserLoggedIn() {
 // FUNÇÕES DE API
 // ============================================
 
-async function fetchAPI(endpoint, options = {}) {
+export async function fetchAPI(endpoint, options = {}) {
     try {
         const response = await fetch(endpoint, {
             headers: {
@@ -53,25 +53,25 @@ async function fetchAPI(endpoint, options = {}) {
     }
 }
 
-async function getAPI(endpoint) {
+export async function getAPI(endpoint) {
     return fetchAPI(endpoint, { method: 'GET' });
 }
 
-async function postAPI(endpoint, dados) {
+export async function postAPI(endpoint, dados) {
     return fetchAPI(endpoint, {
         method: 'POST',
         body: JSON.stringify(dados)
     });
 }
 
-async function putAPI(endpoint, dados) {
+export async function putAPI(endpoint, dados) {
     return fetchAPI(endpoint, {
         method: 'PUT',
         body: JSON.stringify(dados)
     });
 }
 
-async function deleteAPI(endpoint) {
+export async function deleteAPI(endpoint) {
     return fetchAPI(endpoint, { method: 'DELETE' });
 }
 
@@ -79,26 +79,26 @@ async function deleteAPI(endpoint) {
 // FUNÇÕES DE FORMATAÇÃO
 // ============================================
 
-function formatarMoeda(valor) {
+export function formatarMoeda(valor) {
     return parseFloat(valor).toLocaleString('pt-BR', {
         style: 'currency',
         currency: 'BRL'
     });
 }
 
-function formatarData(data) {
+export function formatarData(data) {
     if (!data) return '-';
     const d = new Date(data);
     return d.toLocaleDateString('pt-BR');
 }
 
-function formatarDataHora(data) {
+export function formatarDataHora(data) {
     if (!data) return '-';
     const d = new Date(data);
     return d.toLocaleString('pt-BR');
 }
 
-function formatarNumero(numero) {
+export function formatarNumero(numero) {
     return parseInt(numero).toLocaleString('pt-BR');
 }
 
@@ -106,12 +106,12 @@ function formatarNumero(numero) {
 // FUNÇÕES DE VALIDAÇÃO
 // ============================================
 
-function validarEmail(email) {
+export function validarEmail(email) {
     const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return regex.test(email);
 }
 
-function validarCPF(cpf) {
+export function validarCPF(cpf) {
     cpf = cpf.replace(/\D/g, '');
     if (cpf.length !== 11) return false;
     if (/^(\d)\1{10}$/.test(cpf)) return false;
@@ -139,14 +139,14 @@ function validarCPF(cpf) {
     return true;
 }
 
-function validarCNPJ(cnpj) {
+export function validarCNPJ(cnpj) {
     cnpj = cnpj.replace(/\D/g, '');
     if (cnpj.length !== 14) return false;
     if (/^(\d)\1{13}$/.test(cnpj)) return false;
     return true;
 }
 
-function validarTelefone(telefone) {
+export function validarTelefone(telefone) {
     const regex = /^\(?[1-9]{2}\)? 9?\d{4}-?\d{4}$/;
     return regex.test(telefone);
 }
@@ -155,19 +155,19 @@ function validarTelefone(telefone) {
 // FUNÇÕES DE DOM
 // ============================================
 
-function getElementById(id) {
+export function getElementById(id) {
     return document.getElementById(id);
 }
 
-function querySelector(selector) {
+export function querySelector(selector) {
     return document.querySelector(selector);
 }
 
-function querySelectorAll(selector) {
+export function querySelectorAll(selector) {
     return document.querySelectorAll(selector);
 }
 
-function criarElemento(tag, classes = '', innerHTML = '') {
+export function criarElemento(tag, classes = '', innerHTML = '') {
     const elemento = document.createElement(tag);
     if (classes) elemento.className = classes;
     if (innerHTML) elemento.innerHTML = innerHTML;
@@ -178,7 +178,7 @@ function criarElemento(tag, classes = '', innerHTML = '') {
 // FUNÇÕES DE NOTIFICAÇÃO
 // ============================================
 
-function mostrarNotificacao(mensagem, tipo = 'info', duracao = 3000) {
+export function mostrarNotificacao(mensagem, tipo = 'info', duracao = 3000) {
     const notif = criarElemento('div', `alert alert-${tipo}`);
     notif.textContent = mensagem;
     notif.style.cssText = `
@@ -198,19 +198,19 @@ function mostrarNotificacao(mensagem, tipo = 'info', duracao = 3000) {
     }, duracao);
 }
 
-function mostrarErro(mensagem) {
+export function mostrarErro(mensagem) {
     mostrarNotificacao(mensagem, 'erro');
 }
 
-function mostrarSucesso(mensagem) {
+export function mostrarSucesso(mensagem) {
     mostrarNotificacao(mensagem, 'sucesso');
 }
 
-function mostrarAviso(mensagem) {
+export function mostrarAviso(mensagem) {
     mostrarNotificacao(mensagem, 'aviso');
 }
 
-function mostrarInfo(mensagem) {
+export function mostrarInfo(mensagem) {
     mostrarNotificacao(mensagem, 'info');
 }
 
@@ -218,7 +218,7 @@ function mostrarInfo(mensagem) {
 // FUNÇÕES DE CONFIRMAÇÃO
 // ============================================
 
-function confirmar(mensagem) {
+export function confirmar(mensagem) {
     return new Promise((resolve) => {
         const modal = criarElemento('div', 'modal show');
         modal.innerHTML = `
@@ -261,7 +261,7 @@ function confirmar(mensagem) {
 // FUNÇÕES DE ARMAZENAMENTO
 // ============================================
 
-function salvarLocalStorage(chave, valor) {
+export function salvarLocalStorage(chave, valor) {
     try {
         localStorage.setItem(chave, typeof valor === 'object' ? JSON.stringify(valor) : valor);
     } catch (erro) {
@@ -269,7 +269,7 @@ function salvarLocalStorage(chave, valor) {
     }
 }
 
-function obterLocalStorage(chave) {
+export function obterLocalStorage(chave) {
     try {
         const valor = localStorage.getItem(chave);
         try {
@@ -283,7 +283,7 @@ function obterLocalStorage(chave) {
     }
 }
 
-function removerLocalStorage(chave) {
+export function removerLocalStorage(chave) {
     try {
         localStorage.removeItem(chave);
     } catch (erro) {
@@ -295,7 +295,7 @@ function removerLocalStorage(chave) {
 // FUNÇÕES DE SIDEBAR
 // ============================================
 
-function toggleSidebarSize() {
+export function toggleSidebarSize() {
     const sidebar = querySelector('.sidebar');
     if (sidebar) {
         sidebar.classList.toggle('minimized');
@@ -304,7 +304,7 @@ function toggleSidebarSize() {
     }
 }
 
-function restoreSidebarState() {
+export function restoreSidebarState() {
     const sidebar = querySelector('.sidebar');
     const isMinimized = obterLocalStorage(APP_CONFIG.sidebarMinimized);
     if (isMinimized && sidebar) {
@@ -316,7 +316,7 @@ function restoreSidebarState() {
 // FUNÇÕES DE LOGOUT
 // ============================================
 
-function handleLogout(e) {
+export function handleLogout(e) {
     e.preventDefault();
     if (confirm('Tem certeza que deseja sair?')) {
         sessionStorage.removeItem(APP_CONFIG.sessionKey);
@@ -329,7 +329,7 @@ function handleLogout(e) {
 // FUNÇÕES DE PERFIL
 // ============================================
 
-function initializeUserProfile() {
+export function initializeUserProfile() {
     try {
         const userStr = localStorage.getItem(APP_CONFIG.userKey);
         if (userStr) {
@@ -444,7 +444,7 @@ function updateFromLocalStorage(user) {
 // FUNÇÕES DE MENU
 // ============================================
 
-function toggleUserDropdown(e) {
+export function toggleUserDropdown(e) {
     e.preventDefault();
     const dropdown = getElementById('userDropdown');
     if (dropdown) {
@@ -452,42 +452,3 @@ function toggleUserDropdown(e) {
     }
 }
 
-// Exportar para uso em ES6 (se necessário)
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        APP_CONFIG,
-        getCurrentUser,
-        isUserLoggedIn,
-        fetchAPI,
-        getAPI,
-        postAPI,
-        putAPI,
-        deleteAPI,
-        formatarMoeda,
-        formatarData,
-        formatarDataHora,
-        formatarNumero,
-        validarEmail,
-        validarCPF,
-        validarCNPJ,
-        validarTelefone,
-        getElementById,
-        querySelector,
-        querySelectorAll,
-        criarElemento,
-        mostrarNotificacao,
-        mostrarErro,
-        mostrarSucesso,
-        mostrarAviso,
-        mostrarInfo,
-        confirmar,
-        salvarLocalStorage,
-        obterLocalStorage,
-        removerLocalStorage,
-        toggleSidebarSize,
-        restoreSidebarState,
-        handleLogout,
-        initializeUserProfile,
-        toggleUserDropdown
-    };
-}

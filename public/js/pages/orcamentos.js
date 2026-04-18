@@ -3,7 +3,9 @@
  * Fluxo completo: listagem, novo/editar com itens, aprovar/recusar, exportação PDF/Excel.
  */
 
-const orcamentosPage = {
+import { formatarMoeda, formatarData } from '../utils.js';
+
+export const orcamentosPage = {
     title: 'Orçamentos',
     content: `
         <!-- LISTAGEM -->
@@ -40,7 +42,7 @@ const orcamentosPage = {
                             <th>Validade</th>
                             <th>Valor</th>
                             <th>Status</th>
-                            <th style="width: 280px;">Ações</th>
+                            <th style="width: 260px;">Ações</th>
                         </tr>
                     </thead>
                     <tbody id="orcamentosTbody"></tbody>
@@ -271,7 +273,7 @@ const orcState = {
 };
 
 // ====== Inicialização ======
-function inicializarOrcamentos() {
+export function inicializarOrcamentos() {
     carregarOrcamentos();
     adicionarEstilosOrcamento();
 
@@ -350,27 +352,31 @@ async function carregarOrcamentos() {
 function renderAcoesOrcamento(o) {
     const podeAprovar = o.status === 'pendente';
     return `
-        <div class="acoes-row">
-            <button class="btn btn-secondary btn-small" onclick="editarOrcamento(${o.id})" title="Editar">
-                <i class="fas fa-edit"></i>
-            </button>
+        <div class="acoes-stack">
+            <div class="acoes-row">
+                <button class="btn btn-secondary btn-small" onclick="editarOrcamento(${o.id})" title="Editar">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-secondary btn-small" onclick="exportarOrcamentoPDF(${o.id})" title="Exportar PDF">
+                    <i class="fas fa-file-pdf"></i>
+                </button>
+                <button class="btn btn-secondary btn-small" onclick="exportarOrcamentoExcel(${o.id})" title="Exportar Excel">
+                    <i class="fas fa-file-excel"></i>
+                </button>
+                <button class="btn btn-secondary btn-small" style="color:#c62828;border-color:#c62828" onclick="deletarOrcamento(${o.id})" title="Deletar">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
             ${podeAprovar ? `
-                <button class="btn btn-primary btn-small" style="background:#2e7d32" onclick="aprovarOrcamento(${o.id})" title="Aprovar">
-                    <i class="fas fa-check"></i>
-                </button>
-                <button class="btn btn-secondary btn-small" style="color:#c62828;border-color:#c62828" onclick="recusarOrcamento(${o.id})" title="Recusar">
-                    <i class="fas fa-times"></i>
-                </button>
+                <div class="acoes-row acoes-row-secundaria">
+                    <button class="btn btn-primary btn-small acao-aprovar" onclick="aprovarOrcamento(${o.id})">
+                        <i class="fas fa-check"></i> Aprovar
+                    </button>
+                    <button class="btn btn-secondary btn-small acao-recusar" onclick="recusarOrcamento(${o.id})">
+                        <i class="fas fa-times"></i> Recusar
+                    </button>
+                </div>
             ` : ''}
-            <button class="btn btn-secondary btn-small" onclick="exportarOrcamentoPDF(${o.id})" title="Exportar PDF">
-                <i class="fas fa-file-pdf"></i>
-            </button>
-            <button class="btn btn-secondary btn-small" onclick="exportarOrcamentoExcel(${o.id})" title="Exportar Excel">
-                <i class="fas fa-file-excel"></i>
-            </button>
-            <button class="btn btn-secondary btn-small" style="color:#c62828;border-color:#c62828" onclick="deletarOrcamento(${o.id})" title="Deletar">
-                <i class="fas fa-trash"></i>
-            </button>
         </div>
     `;
 }
@@ -402,20 +408,20 @@ async function abrirFormularioNovo() {
     document.getElementById('orcBaseCard').style.display = 'block';
 
     limparFormulario();
-    await Promise.all([carregarClientes(), carregarProfissionais(), carregarProdutosCache()]);
+    await Promise.all([carregarClientesOrc(), carregarProfissionaisOrc(), carregarProdutosCache()]);
     renderizarItens();
     recalcularTotais();
     mostrarView(false);
 }
 
-async function editarOrcamento(id) {
+export async function editarOrcamento(id) {
     orcState.modoEdicao = true;
     orcState.editingId = id;
     document.getElementById('orcFormTitulo').textContent = `Editar Orçamento #${id}`;
     document.getElementById('orcBaseCard').style.display = 'none';
 
     limparFormulario();
-    await Promise.all([carregarClientes(), carregarProfissionais(), carregarProdutosCache()]);
+    await Promise.all([carregarClientesOrc(), carregarProfissionaisOrc(), carregarProdutosCache()]);
 
     try {
         const res = await fetch(`/api/orcamentos/${id}`);
@@ -491,23 +497,27 @@ function snapshotFormulario() {
 }
 
 // ====== Dropdowns de apoio ======
-async function carregarClientes() {
+// Nomes prefixados com "orc" para evitar colisão global com funções de mesmo nome
+// nas páginas de clientes/profissionais.
+async function carregarClientesOrc() {
     try {
         const res = await fetch('/api/clientes?limite=500');
         const data = await res.json();
         orcState.clientes = data.dados || [];
         const sel = document.getElementById('orcClienteSelect');
+        if (!sel) return;
         sel.innerHTML = '<option value="">Selecione...</option>' +
             orcState.clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
     } catch (_) {}
 }
 
-async function carregarProfissionais() {
+async function carregarProfissionaisOrc() {
     try {
         const res = await fetch('/api/profissionais?limite=500');
         const data = await res.json();
         orcState.profissionais = data.dados || [];
         const sel = document.getElementById('orcProfissionalSelect');
+        if (!sel) return;
         sel.innerHTML = '<option value="">Nenhum</option>' +
             orcState.profissionais.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
     } catch (_) {}
@@ -573,7 +583,7 @@ function renderizarItens() {
     }).join('');
 }
 
-function moverItem(idx, dir) {
+export function moverItem(idx, dir) {
     const novoIdx = idx + dir;
     if (novoIdx < 0 || novoIdx >= orcState.itens.length) return;
     const tmp = orcState.itens[idx];
@@ -582,19 +592,19 @@ function moverItem(idx, dir) {
     renderizarItens();
 }
 
-function alterarQuantidade(idx, valor) {
+export function alterarQuantidade(idx, valor) {
     orcState.itens[idx].quantidade = Math.max(1, parseInt(valor) || 1);
     renderizarItens();
     recalcularTotais();
 }
 
-function alterarPreco(idx, valor) {
+export function alterarPreco(idx, valor) {
     orcState.itens[idx].preco_unitario = Math.max(0, parseFloat(valor) || 0);
     renderizarItens();
     recalcularTotais();
 }
 
-function removerItem(idx) {
+export function removerItem(idx) {
     orcState.itens.splice(idx, 1);
     renderizarItens();
     recalcularTotais();
@@ -628,7 +638,7 @@ function filtrarListaProdutos() {
     `).join('');
 }
 
-function selecionarProduto(id) {
+export function selecionarProduto(id) {
     const p = orcState.produtosCache.find(x => x.id === id);
     if (!p) return;
     orcState.itens.push({
@@ -711,7 +721,7 @@ function filtrarListaBase() {
     });
 }
 
-async function selecionarBase(id) {
+export async function selecionarBase(id) {
     try {
         const res = await fetch(`/api/orcamentos/${id}`);
         const data = await res.json();
@@ -808,7 +818,7 @@ async function salvarOrcamento() {
 }
 
 // ====== Ações da listagem ======
-async function aprovarOrcamento(id) {
+export async function aprovarOrcamento(id) {
     if (!confirm('Confirmar criação de um novo pedido?')) return;
     try {
         const res = await fetch(`/api/orcamentos/${id}/aprovar`, { method: 'POST' });
@@ -821,7 +831,7 @@ async function aprovarOrcamento(id) {
     }
 }
 
-async function recusarOrcamento(id) {
+export async function recusarOrcamento(id) {
     const motivo = prompt('Motivo da recusa (opcional):', '');
     if (motivo === null) return;
     try {
@@ -839,7 +849,7 @@ async function recusarOrcamento(id) {
     }
 }
 
-async function deletarOrcamento(id) {
+export async function deletarOrcamento(id) {
     if (!confirm('Tem certeza que deseja deletar este orçamento?')) return;
     try {
         const res = await fetch(`/api/orcamentos/${id}`, { method: 'DELETE' });
@@ -852,7 +862,7 @@ async function deletarOrcamento(id) {
 }
 
 // ====== Exportação ======
-async function exportarOrcamentoPDF(id) {
+export async function exportarOrcamentoPDF(id) {
     try {
         const res = await fetch(`/api/orcamentos/${id}/exportacao`);
         const data = await res.json();
@@ -863,7 +873,7 @@ async function exportarOrcamentoPDF(id) {
     }
 }
 
-async function exportarOrcamentoExcel(id) {
+export async function exportarOrcamentoExcel(id) {
     try {
         const res = await fetch(`/api/orcamentos/${id}/exportacao`);
         const data = await res.json();
@@ -896,13 +906,13 @@ function gerarCSVOrcamento({ orcamento, itens, empresa }) {
             (it.produto_nome || it.nome_customizado || '').replace(/;/g, ','),
             it.categoria || '-',
             it.quantidade,
-            (it.preco_unitario || 0).toFixed(2).replace('.', ','),
-            (it.subtotal || 0).toFixed(2).replace('.', ',')
+            (Number(it.preco_unitario) || 0).toFixed(2).replace('.', ','),
+            (Number(it.subtotal) || 0).toFixed(2).replace('.', ',')
         ].join(sep));
     });
     linhas.push([]);
-    linhas.push(['Desconto (%)', (orcamento.desconto || 0)].join(sep));
-    linhas.push(['Total', (orcamento.valor_total || 0).toFixed(2).replace('.', ',')].join(sep));
+    linhas.push(['Desconto (%)', Number(orcamento.desconto) || 0].join(sep));
+    linhas.push(['Total', (Number(orcamento.valor_total) || 0).toFixed(2).replace('.', ',')].join(sep));
     linhas.push(['Forma de Pagamento', orcamento.forma_pagamento || ''].join(sep));
     linhas.push(['Observações', (orcamento.observacoes || '').replace(/\n/g, ' | ')].join(sep));
 
@@ -1075,7 +1085,14 @@ function adicionarEstilosOrcamento() {
         .filters-row { display:flex; gap:.5rem; margin-bottom:1rem; flex-wrap:wrap; }
         .filters-row input, .filters-row select { flex:1; min-width:150px; padding:.5rem; border:1px solid #ddd; border-radius:6px; }
         .section-title { color: var(--primary-blue); font-size:1.1rem; margin: 1.25rem 0 .75rem 0; padding-bottom: .3rem; border-bottom:2px solid var(--light-blue); }
+        .acoes-stack { display:flex; flex-direction:column; gap:.35rem; }
         .acoes-row { display:flex; gap:.25rem; flex-wrap:wrap; }
+        .acoes-row-secundaria { flex-wrap:nowrap; padding-top:.35rem; border-top:1px dashed #dfe4ec; }
+        .acoes-row-secundaria .btn { flex:1; justify-content:center; white-space:nowrap; }
+        .acao-aprovar { background:#2e7d32; color:#fff; }
+        .acao-aprovar:hover { background:#256a28; }
+        .acao-recusar { color:#c62828; border-color:#c62828; }
+        .acao-recusar:hover { background:#c62828; color:#fff; }
         .btn-icone { background:none; border:1px solid transparent; padding:.25rem .4rem; cursor:pointer; border-radius:4px; }
         .btn-icone:hover { background:#f0f4fb; }
         .btn-icone:disabled { opacity:.3; cursor:not-allowed; }
@@ -1087,3 +1104,17 @@ function adicionarEstilosOrcamento() {
     `;
     document.head.appendChild(style);
 }
+
+// Handlers chamados via onclick/onchange inline nos templates HTML
+window.editarOrcamento = editarOrcamento;
+window.aprovarOrcamento = aprovarOrcamento;
+window.recusarOrcamento = recusarOrcamento;
+window.deletarOrcamento = deletarOrcamento;
+window.exportarOrcamentoPDF = exportarOrcamentoPDF;
+window.exportarOrcamentoExcel = exportarOrcamentoExcel;
+window.moverItem = moverItem;
+window.alterarQuantidade = alterarQuantidade;
+window.alterarPreco = alterarPreco;
+window.removerItem = removerItem;
+window.selecionarProduto = selecionarProduto;
+window.selecionarBase = selecionarBase;

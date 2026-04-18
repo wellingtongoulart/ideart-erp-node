@@ -3,7 +3,10 @@
  * Gerenciamento de clientes do sistema
  */
 
-const clientesPage = {
+import { abrirEdicao } from '../edit-modal.js';
+import { BuscaAvancada } from '../busca-avancada.js';
+
+export const clientesPage = {
     title: 'Clientes',
     content: `
         <div class="card">
@@ -98,7 +101,7 @@ const clientesPage = {
 /**
  * Inicializa a página de clientes
  */
-function inicializarClientes() {
+export function inicializarClientes() {
     const novoClienteBtn = document.getElementById('novoClienteBtn');
     const fecharModalBtn = document.getElementById('fecharModalClienteBtn');
     const cancelarClienteBtn = document.getElementById('cancelarClienteBtn');
@@ -250,14 +253,14 @@ function salvarNovoCliente() {
 /**
  * Edita um cliente
  */
-function editarCliente(id) {
+export function editarCliente(id) {
     abrirEdicao('cliente', id);
 }
 
 /**
  * Deleta um cliente
  */
-function deletarCliente(id) {
+export function deletarCliente(id) {
     if (confirm('Tem certeza que deseja deletar este cliente?')) {
         fetch(`/api/clientes/${id}`, {
             method: 'DELETE'
@@ -324,3 +327,7 @@ function abrirBuscaClientes() {
     }
     window.buscaClientes.abrir();
 }
+
+// Handlers chamados via onclick="..." inline nos templates HTML
+window.editarCliente = editarCliente;
+window.deletarCliente = deletarCliente;
