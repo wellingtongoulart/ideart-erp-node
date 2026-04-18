@@ -4,7 +4,9 @@
  * Permite visualizar detalhes (itens, cliente, vínculo com orçamento) e atualizar status.
  */
 
-const pedidosPage = {
+import { formatarMoeda, formatarData } from '../utils.js';
+
+export const pedidosPage = {
     title: 'Pedidos',
     content: `
         <div id="pedidosListaView" class="card">
@@ -75,7 +77,7 @@ const pedState = {
     pedidoAtual: null
 };
 
-function inicializarPedidos() {
+export function inicializarPedidos() {
     carregarPedidos();
     adicionarEstilosPedidos();
 
@@ -116,7 +118,7 @@ async function carregarPedidos() {
                 <td>${p.cliente_nome || '-'}</td>
                 <td>${formatarData(p.data_pedido)}</td>
                 <td>${formatarMoeda(p.valor_total || 0)}</td>
-                <td><span class="status-badge" style="background:${corStatusPed(p.status)};color:#fff;padding:.25rem .5rem;border-radius:4px;font-size:.85rem;">${p.status}</span></td>
+                <td>${renderStatusSelectPed(p)}</td>
                 <td>
                     <div class="acoes-row">
                         <button class="btn btn-primary btn-small" onclick="abrirDetalhesPedido(${p.id})" title="Detalhes/Editar">
@@ -146,7 +148,68 @@ function corStatusPed(status) {
     return cores[status] || '#607d8b';
 }
 
-async function abrirDetalhesPedido(id) {
+const STATUS_PEDIDO_OPCOES = ['pendente', 'processando', 'enviado', 'entregue', 'cancelado'];
+
+function renderStatusSelectPed(p) {
+    const desabilitado = p.status === 'cancelado' || p.status === 'entregue';
+    const cor = corStatusPed(p.status);
+    const options = STATUS_PEDIDO_OPCOES.map(s =>
+        `<option value="${s}" ${p.status === s ? 'selected' : ''}>${s}</option>`
+    ).join('');
+    return `
+        <select class="status-select"
+                data-id="${p.id}"
+                data-status-anterior="${p.status}"
+                style="background:${cor};"
+                ${desabilitado ? 'disabled' : ''}
+                onchange="mudarStatusPedido(this)">
+            ${options}
+        </select>
+    `;
+}
+
+export async function mudarStatusPedido(sel) {
+    const id = sel.dataset.id;
+    const statusAnterior = sel.dataset.statusAnterior;
+    const novoStatus = sel.value;
+    if (novoStatus === statusAnterior) return;
+
+    if (novoStatus === 'cancelado') {
+        sel.value = statusAnterior;
+        alert('Para cancelar, use o botão "Cancelar" ao lado — ele permite informar o motivo.');
+        return;
+    }
+
+    const ok = confirm(`Alterar status do pedido para "${novoStatus}"?`);
+    if (!ok) {
+        sel.value = statusAnterior;
+        return;
+    }
+
+    sel.disabled = true;
+    try {
+        const res = await fetch(`/api/pedidos/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: novoStatus })
+        });
+        const data = await res.json();
+        if (!data.sucesso) throw new Error(data.mensagem);
+        sel.dataset.statusAnterior = novoStatus;
+        sel.style.background = corStatusPed(novoStatus);
+        if (novoStatus === 'entregue' || novoStatus === 'cancelado') {
+            sel.disabled = true;
+        } else {
+            sel.disabled = false;
+        }
+    } catch (e) {
+        alert(e.message || 'Erro ao atualizar status');
+        sel.value = statusAnterior;
+        sel.disabled = false;
+    }
+}
+
+export async function abrirDetalhesPedido(id) {
     pedState.pedidoAtualId = id;
     try {
         const res = await fetch(`/api/pedidos/${id}`);
@@ -254,7 +317,7 @@ async function salvarAlteracoesPedido() {
     }
 }
 
-async function cancelarPedido(id) {
+export async function cancelarPedido(id) {
     const motivo = prompt('Motivo do cancelamento (opcional):', '');
     if (motivo === null) return;
     try {
@@ -287,6 +350,32 @@ function adicionarEstilosPedidos() {
         .totals-box { background:#f5f8fc; border-radius:8px; padding:.75rem 1.25rem; display:flex; flex-direction:column; gap:.4rem; align-items:flex-end; }
         .totals-box > div { display:flex; gap:1rem; min-width:240px; justify-content:space-between; }
         .totals-box .total-final { border-top:2px solid var(--primary-blue); padding-top:.3rem; font-size:1.05rem; color: var(--primary-blue); }
+        .status-select {
+            color: #fff;
+            font-weight: 600;
+            font-size: .85rem;
+            padding: .3rem .6rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-transform: capitalize;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right .3rem center;
+            background-size: 16px;
+            padding-right: 1.6rem;
+            transition: opacity .2s ease;
+        }
+        .status-select:hover:not(:disabled) { opacity: .85; }
+        .status-select:disabled { cursor: not-allowed; opacity: .7; }
+        .status-select option { background: #fff; color: #333; font-weight: 500; }
     `;
     document.head.appendChild(style);
 }
+
+// Handlers chamados via onclick/onchange inline nos templates HTML
+window.abrirDetalhesPedido = abrirDetalhesPedido;
+window.cancelarPedido = cancelarPedido;
+window.mudarStatusPedido = mudarStatusPedido;

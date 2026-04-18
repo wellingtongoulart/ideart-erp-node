@@ -1,25 +1,28 @@
 /**
- * IDEART ERP - Application Main File (Refactored)
- * 
- * Este arquivo gerencia o roteamento de páginas e a inicialização do aplicativo.
- * 
- * ESTRUTURA MODULAR:
- * - utils.js: Funções utilitárias (API, formatting, validação, etc)
- * - modal.js: Sistema de modais reutilizável
- * - pages/*.js: Lógica específica de cada página
- * 
- * DEPENDÊNCIAS:
- * - Requer: utils.js, modal.js, pages/*.js (devem estar carregados antes)
- * - Não tem dependências internas
+ * IDEART ERP — Entry point (ES Module)
+ *
+ * Roteamento client-side, inicialização e fiação da UI.
  */
 
-/**
- * Mapa de páginas e suas funções de inicialização
- * Cada página deve ser definida em pages/*.js com:
- *  - [name]Page.title (string)
- *  - [name]Page.content (HTML string)
- *  - inicializar[Name]() (function)
- */
+import {
+    restoreSidebarState,
+    initializeUserProfile,
+    handleLogout,
+    toggleSidebarSize,
+    toggleUserDropdown,
+    mostrarErro
+} from './utils.js';
+
+import { abrirModalAlterarSenha } from './change-password.js';
+
+import { dashboardPage, inicializarDashboard } from './pages/dashboard.js';
+import { produtosPage, inicializarProdutos } from './pages/produtos.js';
+import { pedidosPage, inicializarPedidos } from './pages/pedidos.js';
+import { clientesPage, inicializarClientes } from './pages/clientes.js';
+import { orcamentosPage, inicializarOrcamentos } from './pages/orcamentos.js';
+import { profissionaisPage, inicializarProfissionais } from './pages/profissionais.js';
+import { relatoriosPage, inicializarRelatorios } from './pages/relatorios.js';
+
 const pageConfig = {
     dashboard: {
         init: () => {
@@ -63,22 +66,6 @@ const pageConfig = {
             inicializarProfissionais();
         }
     },
-    // TODO: Logística desabilitada — reativar quando solicitado.
-    // logistica: {
-    //     init: () => {
-    //         document.getElementById('pageTitle').textContent = logisticaPage.title;
-    //         document.getElementById('contentArea').innerHTML = logisticaPage.content;
-    //         inicializarLogistica();
-    //     }
-    // },
-    // TODO: Documentos desabilitado — reativar quando solicitado.
-    // documentos: {
-    //     init: () => {
-    //         document.getElementById('pageTitle').textContent = documentosPage.title;
-    //         document.getElementById('contentArea').innerHTML = documentosPage.content;
-    //         inicializarDocumentos();
-    //     }
-    // },
     relatorios: {
         init: () => {
             document.getElementById('pageTitle').textContent = relatoriosPage.title;
@@ -90,23 +77,13 @@ const pageConfig = {
 
 const DEFAULT_PAGE = 'dashboard';
 
-/**
- * Lê o nome da página a partir do hash atual da URL.
- * Aceita os formatos "#pagina" e "#/pagina".
- * @returns {string} Nome da página ou DEFAULT_PAGE se hash inválido.
- */
 function getPageFromHash() {
     const raw = (window.location.hash || '').replace(/^#\/?/, '').trim();
     if (!raw) return DEFAULT_PAGE;
     return pageConfig[raw] ? raw : DEFAULT_PAGE;
 }
 
-/**
- * Navega para uma página atualizando o hash da URL.
- * A renderização real é disparada pelo evento hashchange.
- * @param {string} pageName - Nome da página (chave em pageConfig)
- */
-function navigateTo(pageName) {
+export function navigateTo(pageName) {
     const target = pageConfig[pageName] ? pageName : DEFAULT_PAGE;
     const nextHash = `#/${target}`;
     if (window.location.hash === nextHash) {
@@ -116,10 +93,6 @@ function navigateTo(pageName) {
     }
 }
 
-/**
- * Renderiza a página indicada (atualiza menu ativo, título e conteúdo).
- * @param {string} pageName - Nome da página (chave em pageConfig)
- */
 function renderPage(pageName) {
     const pageConfig_item = pageConfig[pageName];
 
@@ -130,7 +103,6 @@ function renderPage(pageName) {
     }
 
     try {
-        // Atualizar menu ativo
         document.querySelectorAll('.menu-item').forEach(item => {
             item.classList.remove('active');
         });
@@ -139,13 +111,11 @@ function renderPage(pageName) {
             activeMenuItem.classList.add('active');
         }
 
-        // Fechar sidebar em mobile após clicar
         const sidebar = document.querySelector('.sidebar');
         if (window.innerWidth <= 768 && sidebar.classList.contains('active')) {
             sidebar.classList.remove('active');
         }
 
-        // Inicializar a página
         pageConfig_item.init();
     } catch (error) {
         console.error(`Erro ao carregar página '${pageName}':`, error);
@@ -154,44 +124,28 @@ function renderPage(pageName) {
 }
 
 // Mantém compatibilidade com chamadas existentes a loadPage(name)
-function loadPage(pageName) {
+export function loadPage(pageName) {
     navigateTo(pageName);
 }
 
-/**
- * Inicializa o aplicativo
- * Chamado quando DOMContentLoaded é disparado
- */
 function initializeApp() {
     try {
-        // Restaurar estado do sidebar
         restoreSidebarState();
-        
-        // Inicializar perfil do usuário
         initializeUserProfile();
 
-        // Garantir que a URL tenha um hash válido na primeira carga
         const initialPage = getPageFromHash();
         if (!window.location.hash) {
-            // replaceState evita criar uma entrada extra no histórico
             history.replaceState(null, '', `#/${initialPage}`);
         }
 
-        // Renderizar página conforme o hash atual (ou padrão)
         renderPage(initialPage);
 
-        // Reagir a mudanças de hash (back/forward do navegador, link direto, etc.)
         window.addEventListener('hashchange', () => {
             renderPage(getPageFromHash());
         });
 
-        // Setup navigation
         setupNavigation();
-        
-        // Setup sidebar toggle
         setupSidebarToggle();
-        
-        // Setup user menu
         setupUserMenu();
     } catch (error) {
         console.error('Erro ao inicializar aplicação:', error);
@@ -199,9 +153,6 @@ function initializeApp() {
     }
 }
 
-/**
- * Configura navegação entre páginas
- */
 function setupNavigation() {
     document.querySelectorAll('.menu-item[data-page]').forEach(item => {
         item.addEventListener('click', (e) => {
@@ -212,20 +163,16 @@ function setupNavigation() {
     });
 }
 
-/**
- * Configura toggle do sidebar em dispositivos móveis
- */
 function setupSidebarToggle() {
     const toggleSidebar = document.getElementById('toggleSidebar');
     const sidebar = document.querySelector('.sidebar');
-    
+
     if (toggleSidebar) {
         toggleSidebar.addEventListener('click', () => {
             sidebar.classList.toggle('active');
         });
     }
 
-    // Fechar sidebar ao clicar fora
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.sidebar') && !e.target.closest('.toggle-sidebar')) {
             if (window.innerWidth <= 768 && sidebar.classList.contains('active')) {
@@ -234,7 +181,6 @@ function setupSidebarToggle() {
         }
     });
 
-    // Toggle de minimizar/maximizar
     const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
     if (sidebarToggleBtn) {
         sidebarToggleBtn.addEventListener('click', (e) => {
@@ -244,20 +190,16 @@ function setupSidebarToggle() {
     }
 }
 
-/**
- * Configura menu de usuário (dropdown)
- */
 function setupUserMenu() {
     const userMenuBtn = document.getElementById('userMenuBtn');
     const userDropdown = document.getElementById('userDropdown');
     const changePasswordBtn = document.getElementById('changePasswordBtn');
     const logoutBtn = document.getElementById('logoutBtn');
-    
+
     if (userMenuBtn) {
         userMenuBtn.addEventListener('click', toggleUserDropdown);
     }
-    
-    // Fechar dropdown ao clicar fora
+
     document.addEventListener('click', (e) => {
         if (userDropdown && userMenuBtn) {
             if (!userDropdown.contains(e.target) && !userMenuBtn.contains(e.target)) {
@@ -265,38 +207,24 @@ function setupUserMenu() {
             }
         }
     });
-    
-    // Alterar senha
+
     if (changePasswordBtn) {
         changePasswordBtn.addEventListener('click', (e) => {
             e.preventDefault();
             if (userDropdown) {
                 userDropdown.classList.remove('show');
             }
-            if (typeof abrirModalAlterarSenha === 'function') {
-                abrirModalAlterarSenha();
-            } else {
-                mostrarErro('Módulo de alteração de senha indisponível.');
-            }
+            abrirModalAlterarSenha();
         });
     }
-    
-    // Logout
+
     if (logoutBtn) {
         logoutBtn.addEventListener('click', handleLogout);
     }
 }
 
-/**
- * Event Listener: DOMContentLoaded
- * Inicializa o aplicativo quando o DOM está pronto
- */
 document.addEventListener('DOMContentLoaded', initializeApp);
 
-/**
- * Reload da página quando o tamanho da janela muda
- * Para ajustar sidebar responsivo
- */
 window.addEventListener('resize', () => {
     if (window.innerWidth > 768) {
         const sidebar = document.querySelector('.sidebar');

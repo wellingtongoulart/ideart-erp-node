@@ -3,7 +3,10 @@
  * Gerenciamento de profissionais/funcionários do sistema
  */
 
-const profissionaisPage = {
+import { abrirEdicao } from '../edit-modal.js';
+import { BuscaAvancada } from '../busca-avancada.js';
+
+export const profissionaisPage = {
     title: 'Profissionais',
     content: `
         <div class="card">
@@ -115,7 +118,7 @@ const profissionaisPage = {
 /**
  * Inicializa a página de profissionais
  */
-function inicializarProfissionais() {
+export function inicializarProfissionais() {
     const novoProfissionalBtn = document.getElementById('novoProfissionalBtn');
     const fecharModalBtn = document.getElementById('fecharModalProfissionalBtn');
     const cancelarProfissionalBtn = document.getElementById('cancelarProfissionalBtn');
@@ -267,14 +270,14 @@ function salvarNovoProfissional() {
 /**
  * Edita um profissional
  */
-function editarProfissional(id) {
+export function editarProfissional(id) {
     abrirEdicao('profissional', id);
 }
 
 /**
  * Deleta um profissional
  */
-function deletarProfissional(id) {
+export function deletarProfissional(id) {
     if (confirm('Tem certeza que deseja deletar este profissional?')) {
         fetch(`/api/profissionais/${id}`, {
             method: 'DELETE'
@@ -341,3 +344,7 @@ function abrirBuscaProfissionais() {
     }
     window.buscaProfissionais.abrir();
 }
+
+// Handlers chamados via onclick="..." inline nos templates HTML
+window.editarProfissional = editarProfissional;
+window.deletarProfissional = deletarProfissional;

@@ -26,6 +26,7 @@ const profissionaisRoutes = require('./routes/profissionais');
 const logisticaRoutes = require('./routes/logistica');
 const documentosRoutes = require('./routes/documentos');
 const relatoriosRoutes = require('./routes/relatorios');
+const dashboardRoutes = require('./routes/dashboard');
 const autenticacaoRoutes = require('./routes/autenticacao');
 
 app.use('/api/produtos', produtosRoutes);
@@ -36,6 +37,7 @@ app.use('/api/profissionais', profissionaisRoutes);
 app.use('/api/logistica', logisticaRoutes);
 app.use('/api/documentos', documentosRoutes);
 app.use('/api/relatorios', relatoriosRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/autenticacao', autenticacaoRoutes);
 
 // Rota raiz

@@ -3,7 +3,9 @@
  * Componente para criação e edição de registros
  */
 
-class Modal {
+import { validarEmail } from './utils.js';
+
+export class Modal {
     constructor(config) {
         this.id = config.id || 'modal-' + Date.now();
         this.title = config.title || 'Modal';
@@ -336,10 +338,5 @@ class Modal {
     }
 }
 
-// Criar alias para compatibilidade
-const ModalForm = Modal;
-
-// Exportar
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Modal, ModalForm };
-}
+// Alias para compatibilidade
+export const ModalForm = Modal;

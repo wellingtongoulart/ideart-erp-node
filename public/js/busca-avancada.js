@@ -3,7 +3,7 @@
  * Modal inteligente de busca com filtros contextuais
  */
 
-class BuscaAvancada {
+export class BuscaAvancada {
     constructor(config) {
         this.endpoint = config.endpoint;
         this.tituloModal = config.titulo;
@@ -250,5 +250,3 @@ class BuscaAvancada {
     }
 }
 
-// Exporta a classe
-window.BuscaAvancada = BuscaAvancada;

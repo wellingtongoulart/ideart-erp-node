@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/sidebar.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
         // Verificar autenticação antes de carregar a página
         (function() {
@@ -124,37 +125,7 @@
         </main>
     </div>
 
-    <!-- Utilities and Core Libraries (no dependencies) -->
-    <script src="js/utils.js"></script>
-
-    <!-- Modal System (depends on utils.js) -->
-    <script src="js/modal.js"></script>
-
-    <!-- Edit Modal System (depends on utils.js) -->
-    <script src="js/edit-modal.js"></script>
-
-    <!-- Change Password Modal (depends on utils.js) -->
-    <script src="js/change-password.js"></script>
-
-    <!-- Sistema de Busca Avançada -->
-    <script src="js/busca-avancada.js"></script>
-
-    <!-- Page Modules (depend on utils.js and modal.js) -->
-    <script src="js/pages/dashboard.js"></script>
-    <script src="js/pages/produtos.js"></script>
-    <script src="js/pages/pedidos.js"></script>
-    <script src="js/pages/clientes.js"></script>
-    <script src="js/pages/orcamentos.js"></script>
-    <script src="js/pages/profissionais.js"></script>
-    <!-- TODO: Logística desabilitada — reativar quando solicitado.
-    <script src="js/pages/logistica.js"></script>
-    -->
-    <!-- TODO: Documentos desabilitado — reativar quando solicitado.
-    <script src="js/pages/documentos.js"></script>
-    -->
-    <script src="js/pages/relatorios.js"></script>
-
-    <!-- Main Application (depends on all above) -->
-    <script src="js/app.js"></script>
+    <!-- Entry point ES Module — todos os outros arquivos são resolvidos via import -->
+    <script type="module" src="js/app.js"></script>
 </body>
 </html>

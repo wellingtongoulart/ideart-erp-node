@@ -3,7 +3,7 @@
  * Funciona para todos os módulos (produtos, clientes, etc.)
  */
 
-class EditModal {
+export class EditModal {
   constructor(tipoItem, endpoint, campos, options = {}) {
     this.tipoItem = tipoItem; // 'produto', 'cliente', etc.
     this.endpoint = endpoint; // '/api/produtos', '/api/clientes', etc.
@@ -309,7 +309,7 @@ class EditModal {
   }
 }
 
-// Criar instâncias globais para cada módulo
+// Instâncias pré-configuradas para cada módulo
 const editModals = {
   produto: new EditModal('Produto', '/api/produtos', [
     { name: 'nome', label: 'Nome do Produto', required: true },
@@ -390,8 +390,7 @@ const editModals = {
   // ])
 };
 
-// Função global para abrir edição
-function abrirEdicao(tipoItem, id) {
+export function abrirEdicao(tipoItem, id) {
   if (editModals[tipoItem]) {
     editModals[tipoItem].abrirEdicao(id);
   } else {
