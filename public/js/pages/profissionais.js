@@ -212,7 +212,7 @@ function abrirModalNovoProfissional() {
     }
 
     if (modal) {
-        modal.style.display = 'block';
+        modal.classList.add('show');
     }
 }
 
@@ -222,7 +222,7 @@ function abrirModalNovoProfissional() {
 function fecharModalProfissional() {
     const modal = document.getElementById('modalNovoProfissional');
     if (modal) {
-        modal.style.display = 'none';
+        modal.classList.remove('show');
     }
 }
 

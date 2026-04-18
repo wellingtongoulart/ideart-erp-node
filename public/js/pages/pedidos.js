@@ -172,8 +172,8 @@ function carregarPedidos() {
                         <td>${valor}</td>
                         <td><span ${statusClasses[pedido.status] || ''} style="padding: 0.3rem 0.6rem; border-radius: 4px;">${pedido.status}</span></td>
                         <td>
-                            <button class="btn btn-primary btn-small" onclick="verPedido(${pedido.id})">
-                                <i class="fas fa-eye"></i> Ver
+                            <button class="btn btn-primary btn-small" onclick="editarPedido(${pedido.id})">
+                                <i class="fas fa-edit"></i> Editar
                             </button>
                             <button class="btn btn-secondary btn-small" onclick="deletarPedido(${pedido.id})">
                                 <i class="fas fa-trash"></i> Deletar
@@ -202,7 +202,7 @@ function abrirModalNovoPedido() {
     }
 
     if (modal) {
-        modal.style.display = 'block';
+        modal.classList.add('show');
     }
 }
 
@@ -212,7 +212,7 @@ function abrirModalNovoPedido() {
 function fecharModalPedido() {
     const modal = document.getElementById('modalNovoPedido');
     if (modal) {
-        modal.style.display = 'none';
+        modal.classList.remove('show');
     }
 }
 
@@ -255,9 +255,9 @@ function salvarNovoPedido() {
 }
 
 /**
- * Visualiza um pedido específico
+ * Abre o modal de edição de um pedido
  */
-function verPedido(id) {
+function editarPedido(id) {
     abrirEdicao('pedido', id);
 }
 

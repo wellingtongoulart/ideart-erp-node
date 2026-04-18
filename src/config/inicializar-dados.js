@@ -1,9 +1,32 @@
 // Inicializar dados de exemplo
 const pool = require('./database');
 
+async function garantirTabelaRecuperacaoSenha(connection) {
+    await connection.execute(`
+        CREATE TABLE IF NOT EXISTS tokens_recuperacao_senha (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            usuario_id INT NOT NULL,
+            token VARCHAR(128) UNIQUE NOT NULL,
+            data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            data_expiracao DATETIME NOT NULL,
+            usado BOOLEAN DEFAULT FALSE,
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+            INDEX idx_token (token),
+            INDEX idx_usuario_id (usuario_id),
+            INDEX idx_usado (usado)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+}
+
 async function inicializarDadosExemplo() {
     try {
         const connection = await pool.getConnection();
+
+        try {
+            await garantirTabelaRecuperacaoSenha(connection);
+        } catch (e) {
+            console.warn('⚠ Não foi possível garantir a tabela de recuperação de senha:', e.message);
+        }
 
         // Verificar se já existem produtos
         const [produtos] = await connection.execute('SELECT COUNT(*) as count FROM produtos');

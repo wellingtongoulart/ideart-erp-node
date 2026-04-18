@@ -126,4 +126,83 @@ router.get('/usuarios/:id', autenticacaoController.obterUsuario);
 // Obter dados do usuário logado (usando ID do frontend)
 router.get('/user/me', autenticacaoController.obterUsuarioLogado);
 
+/**
+ * @openapi
+ * /api/autenticacao/forgot-password:
+ *   post:
+ *     tags: [Autenticacao]
+ *     summary: Solicita um link de redefinição de senha
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               identificador:
+ *                 type: string
+ *                 description: Username ou email do usuário
+ */
+router.post('/forgot-password', autenticacaoController.solicitarRecuperacaoSenha);
+
+/**
+ * @openapi
+ * /api/autenticacao/validate-reset-token:
+ *   get:
+ *     tags: [Autenticacao]
+ *     summary: Valida um token de redefinição de senha
+ *     security: []
+ *     parameters:
+ *       - in: query
+ *         name: token
+ *         required: true
+ *         schema:
+ *           type: string
+ */
+router.get('/validate-reset-token', autenticacaoController.validarTokenRecuperacao);
+
+/**
+ * @openapi
+ * /api/autenticacao/reset-password:
+ *   post:
+ *     tags: [Autenticacao]
+ *     summary: Redefine a senha usando um token válido
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               token:
+ *                 type: string
+ *               novaSenha:
+ *                 type: string
+ */
+router.post('/reset-password', autenticacaoController.redefinirSenha);
+
+/**
+ * @openapi
+ * /api/autenticacao/change-password:
+ *   post:
+ *     tags: [Autenticacao]
+ *     summary: Altera a senha de um usuário logado
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               usuarioId:
+ *                 type: integer
+ *               senhaAtual:
+ *                 type: string
+ *               novaSenha:
+ *                 type: string
+ */
+router.post('/change-password', autenticacaoController.alterarSenha);
+
 module.exports = router;

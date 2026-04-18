@@ -4,10 +4,14 @@
  */
 
 class EditModal {
-  constructor(tipoItem, endpoint, campos) {
+  constructor(tipoItem, endpoint, campos, options = {}) {
     this.tipoItem = tipoItem; // 'produto', 'cliente', etc.
     this.endpoint = endpoint; // '/api/produtos', '/api/clientes', etc.
     this.campos = campos; // Array de campos para o formulário
+    // Extrator do item a partir da resposta da API. Por padrão o item é
+    // retornado em `data.dados`, mas alguns endpoints (ex.: pedidos) devolvem
+    // uma estrutura aninhada — use esse callback para desembrulhar.
+    this.extrairItem = options.extrairItem || ((data) => data.dados);
     this.modal = null;
     this.itemAtual = null;
   }
@@ -29,13 +33,17 @@ class EditModal {
       }
 
       const data = await response.json();
-      this.itemAtual = data.dados;
+      this.itemAtual = this.extrairItem(data) || {};
 
-      // Preparar campos com valores
-      const camposComValores = this.campos.map(campo => ({
-        ...campo,
-        value: this.itemAtual[campo.name] || ''
-      }));
+      // Preparar campos com valores (normalizando datas para o formato do <input type="date">)
+      const camposComValores = this.campos.map(campo => {
+        let value = this.itemAtual[campo.name];
+        if (value == null) value = '';
+        if (campo.type === 'date' && typeof value === 'string' && value.includes('T')) {
+          value = value.split('T')[0];
+        }
+        return { ...campo, value };
+      });
 
       // Criar e exibir modal
       this.criarModal(camposComValores);
@@ -95,7 +103,9 @@ class EditModal {
    */
   renderizarCampos(campos, modalId) {
     return campos.map(campo => {
-      const { name, label, type = 'text', required = false, placeholder = '', options = [] } = campo;
+      const { name, label, type = 'text', required = false, placeholder = '', options = [], readOnly = false } = campo;
+      const readOnlyAttr = readOnly ? 'readonly' : '';
+      const disabledAttr = readOnly ? 'disabled' : '';
 
       if (type === 'hidden') {
         return `<input type="hidden" name="${name}" value="${campo.value || ''}">`;
@@ -105,12 +115,13 @@ class EditModal {
         return `
                     <div class="form-group">
                         <label for="${modalId}-${name}">${label}${required ? ' <span style="color:red">*</span>' : ''}</label>
-                        <textarea 
-                            id="${modalId}-${name}" 
-                            name="${name}" 
-                            rows="4" 
+                        <textarea
+                            id="${modalId}-${name}"
+                            name="${name}"
+                            rows="4"
                             placeholder="${placeholder}"
                             ${required ? 'required' : ''}
+                            ${readOnlyAttr}
                         >${campo.value || ''}</textarea>
                     </div>
                 `;
@@ -120,17 +131,18 @@ class EditModal {
         const optionsHtml = options.map(opt => {
           const val = typeof opt === 'object' ? opt.value : opt;
           const label = typeof opt === 'object' ? opt.label : opt;
-          const selected = val === campo.value ? 'selected' : '';
+          const selected = String(val) === String(campo.value) ? 'selected' : '';
           return `<option value="${val}" ${selected}>${label}</option>`;
         }).join('');
 
         return `
                     <div class="form-group">
                         <label for="${modalId}-${name}">${label}${required ? ' <span style="color:red">*</span>' : ''}</label>
-                        <select 
-                            id="${modalId}-${name}" 
+                        <select
+                            id="${modalId}-${name}"
                             name="${name}"
                             ${required ? 'required' : ''}
+                            ${disabledAttr}
                         >
                             <option value="">Selecione...</option>
                             ${optionsHtml}
@@ -143,14 +155,15 @@ class EditModal {
         return `
                     <div class="form-group">
                         <label for="${modalId}-${name}">${label}${required ? ' <span style="color:red">*</span>' : ''}</label>
-                        <input 
-                            type="number" 
-                            id="${modalId}-${name}" 
-                            name="${name}" 
-                            value="${campo.value || ''}"
+                        <input
+                            type="number"
+                            id="${modalId}-${name}"
+                            name="${name}"
+                            value="${campo.value !== '' && campo.value != null ? campo.value : ''}"
                             placeholder="${placeholder}"
                             step="0.01"
                             ${required ? 'required' : ''}
+                            ${readOnlyAttr}
                         >
                     </div>
                 `;
@@ -159,11 +172,12 @@ class EditModal {
       if (type === 'checkbox') {
         return `
                     <div class="form-group">
-                        <input 
-                            type="checkbox" 
-                            id="${modalId}-${name}" 
-                            name="${name}" 
+                        <input
+                            type="checkbox"
+                            id="${modalId}-${name}"
+                            name="${name}"
                             ${campo.value ? 'checked' : ''}
+                            ${disabledAttr}
                         >
                         <label for="${modalId}-${name}">${label}</label>
                     </div>
@@ -174,13 +188,14 @@ class EditModal {
       return `
                 <div class="form-group">
                     <label for="${modalId}-${name}">${label}${required ? ' <span style="color:red">*</span>' : ''}</label>
-                    <input 
-                        type="${type}" 
-                        id="${modalId}-${name}" 
-                        name="${name}" 
-                        value="${campo.value || ''}"
+                    <input
+                        type="${type}"
+                        id="${modalId}-${name}"
+                        name="${name}"
+                        value="${campo.value != null ? campo.value : ''}"
                         placeholder="${placeholder}"
                         ${required ? 'required' : ''}
+                        ${readOnlyAttr}
                     >
                 </div>
             `;
@@ -221,6 +236,7 @@ class EditModal {
     const dados = { id: formData.get('id') };
 
     this.campos.forEach(campo => {
+      if (campo.readOnly) return;
       if (campo.type === 'checkbox') {
         dados[campo.name] = form.elements[campo.name]?.checked ? 1 : 0;
       } else if (campo.type === 'number') {
@@ -336,12 +352,24 @@ const editModals = {
   ]),
 
   pedido: new EditModal('Pedido', '/api/pedidos', [
-    { name: 'numero', label: 'Número', required: true },
-    { name: 'cliente_id', label: 'Cliente' },
-    { name: 'data_entrega', label: 'Data de Entrega', type: 'date' },
-    { name: 'valor_total', label: 'Valor Total', type: 'number' },
-    { name: 'status', label: 'Status', type: 'select', options: ['Pendente', 'Confirmado', 'Enviado', 'Entregue'] }
-  ]),
+    { name: 'numero', label: 'Número', readOnly: true },
+    { name: 'cliente_nome', label: 'Cliente', readOnly: true },
+    { name: 'data_pedido', label: 'Data do Pedido', type: 'date', readOnly: true },
+    { name: 'data_entrega_prevista', label: 'Data de Entrega Prevista', type: 'date' },
+    { name: 'valor_total', label: 'Valor Total', type: 'number', readOnly: true },
+    { name: 'desconto', label: 'Desconto', type: 'number' },
+    { name: 'status', label: 'Status', type: 'select', options: [
+      { value: 'pendente', label: 'Pendente' },
+      { value: 'processando', label: 'Processando' },
+      { value: 'enviado', label: 'Enviado' },
+      { value: 'entregue', label: 'Entregue' },
+      { value: 'cancelado', label: 'Cancelado' }
+    ] },
+    { name: 'observacoes', label: 'Observações', type: 'textarea' }
+  ], {
+    // O endpoint de pedidos devolve { dados: { pedido, itens, logistica } }
+    extrairItem: (data) => (data && data.dados && data.dados.pedido) || (data && data.dados) || {}
+  }),
 
   // TODO: Documentos desabilitado — reativar quando solicitado.
   // documento: new EditModal('Documento', '/api/documentos', [
