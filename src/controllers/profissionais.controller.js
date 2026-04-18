@@ -269,3 +269,28 @@ exports.deletar = async (req, res) => {
         });
     }
 };
+
+// GET - Listar especialidades únicas
+exports.especialidades = async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+
+        const [especialidades] = await connection.execute(
+            'SELECT DISTINCT especialidade FROM profissionais WHERE especialidade IS NOT NULL AND especialidade != "" ORDER BY especialidade'
+        );
+
+        connection.release();
+
+        res.json({
+            sucesso: true,
+            mensagem: 'Especialidades listadas com sucesso',
+            dados: especialidades.map(e => e.especialidade)
+        });
+    } catch (erro) {
+        res.status(500).json({
+            sucesso: false,
+            mensagem: 'Erro ao listar especialidades',
+            erro: erro.message
+        });
+    }
+};

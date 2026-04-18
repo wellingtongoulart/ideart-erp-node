@@ -115,11 +115,22 @@ export function inicializarProdutos() {
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
         filtros: [
             { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome ou SKU...' },
+            { chave: 'categoria', tipo: 'select',
+              placeholder: 'Todas as categorias',
+              opcoesEndpoint: '/api/produtos/categorias/lista' },
+            { chave: 'fornecedor', tipo: 'select',
+              placeholder: 'Todos os fornecedores',
+              opcoesEndpoint: '/api/produtos/fornecedores/lista' },
             { chave: 'ativo', tipo: 'select', opcoes: [
-                { valor: '', rotulo: 'Todos (ativos e inativos)' },
                 { valor: 'true', rotulo: 'Somente ativos' },
                 { valor: 'false', rotulo: 'Somente inativos' }
-            ]}
+            ], placeholder: 'Ativos e inativos' },
+            { tipo: 'number-range', rotulo: 'Preço',
+              chaveMin: 'preco_min', chaveMax: 'preco_max',
+              step: '0.01', placeholderMin: 'R$ mín', placeholderMax: 'R$ máx' },
+            { tipo: 'number-range', rotulo: 'Estoque',
+              chaveMin: 'estoque_min', chaveMax: 'estoque_max',
+              step: '1', placeholderMin: 'Mín', placeholderMax: 'Máx' }
         ],
         colunas: [
             { chave: 'id', rotulo: 'ID', ordenavel: true, largura: '70px' },

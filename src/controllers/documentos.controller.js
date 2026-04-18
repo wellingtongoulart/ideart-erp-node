@@ -15,7 +15,12 @@ const COLUNAS_ORDENACAO_DOCUMENTOS = {
 // GET - Listar todos os documentos
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, busca = '', tipo = '', referencia_tipo = '', ordenarPor, ordem } = req.query;
+        const {
+            pagina = 1, limite = 10,
+            busca = '', tipo = '', referencia_tipo = '',
+            data_inicio = '', data_fim = '',
+            ordenarPor, ordem
+        } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
@@ -36,6 +41,15 @@ exports.listar = async (req, res) => {
         if (referencia_tipo) {
             query += ' AND referencia_tipo = ?';
             params.push(referencia_tipo);
+        }
+
+        if (data_inicio) {
+            query += ' AND data_criacao >= ?';
+            params.push(data_inicio);
+        }
+        if (data_fim) {
+            query += ' AND data_criacao <= ?';
+            params.push(data_fim);
         }
 
         const [countResult] = await connection.execute(

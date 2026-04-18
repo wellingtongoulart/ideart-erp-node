@@ -66,7 +66,14 @@ async function substituirItensOrcamento(connection, orcamentoId, itens) {
 // GET - Listar orçamentos com paginação e filtros
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, status = '', cliente_id = '', busca = '', ordenarPor, ordem } = req.query;
+        const {
+            pagina = 1, limite = 10,
+            status = '', cliente_id = '', busca = '',
+            data_criacao_inicio = '', data_criacao_fim = '',
+            data_validade_inicio = '', data_validade_fim = '',
+            valor_min = '', valor_max = '',
+            ordenarPor, ordem
+        } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
@@ -90,6 +97,36 @@ exports.listar = async (req, res) => {
         if (busca) {
             query += ' AND (o.numero LIKE ? OR c.nome LIKE ?)';
             params.push(`%${busca}%`, `%${busca}%`);
+        }
+
+        // Faixa de data de criação
+        if (data_criacao_inicio) {
+            query += ' AND o.data_criacao >= ?';
+            params.push(data_criacao_inicio);
+        }
+        if (data_criacao_fim) {
+            query += ' AND o.data_criacao <= ?';
+            params.push(data_criacao_fim);
+        }
+
+        // Faixa de validade
+        if (data_validade_inicio) {
+            query += ' AND o.data_validade >= ?';
+            params.push(data_validade_inicio);
+        }
+        if (data_validade_fim) {
+            query += ' AND o.data_validade <= ?';
+            params.push(data_validade_fim);
+        }
+
+        // Faixa de valor total
+        if (valor_min !== '' && !isNaN(Number(valor_min))) {
+            query += ' AND o.valor_total >= ?';
+            params.push(Number(valor_min));
+        }
+        if (valor_max !== '' && !isNaN(Number(valor_max))) {
+            query += ' AND o.valor_total <= ?';
+            params.push(Number(valor_max));
         }
 
         const countQuery = query

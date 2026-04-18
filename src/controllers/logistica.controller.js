@@ -17,7 +17,12 @@ const COLUNAS_ORDENACAO_LOGISTICA = {
 // GET - Listar todos os registros de logística
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, busca = '', status = '', pedido_id = '', ordenarPor, ordem } = req.query;
+        const {
+            pagina = 1, limite = 10,
+            busca = '', status = '', pedido_id = '', transportadora = '',
+            data_envio_inicio = '', data_envio_fim = '',
+            ordenarPor, ordem
+        } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
@@ -38,6 +43,20 @@ exports.listar = async (req, res) => {
         if (pedido_id) {
             query += ' AND l.pedido_id = ?';
             params.push(pedido_id);
+        }
+
+        if (transportadora) {
+            query += ' AND l.transportadora = ?';
+            params.push(transportadora);
+        }
+
+        if (data_envio_inicio) {
+            query += ' AND l.data_envio >= ?';
+            params.push(data_envio_inicio);
+        }
+        if (data_envio_fim) {
+            query += ' AND l.data_envio <= ?';
+            params.push(data_envio_fim);
         }
 
         const [countResult] = await connection.execute(
@@ -241,6 +260,31 @@ exports.deletar = async (req, res) => {
         res.status(500).json({
             sucesso: false,
             mensagem: 'Erro ao deletar registro',
+            erro: erro.message
+        });
+    }
+};
+
+// GET - Listar transportadoras únicas
+exports.transportadoras = async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+
+        const [transportadoras] = await connection.execute(
+            'SELECT DISTINCT transportadora FROM logistica WHERE transportadora IS NOT NULL AND transportadora != "" ORDER BY transportadora'
+        );
+
+        connection.release();
+
+        res.json({
+            sucesso: true,
+            mensagem: 'Transportadoras listadas com sucesso',
+            dados: transportadoras.map(t => t.transportadora)
+        });
+    } catch (erro) {
+        res.status(500).json({
+            sucesso: false,
+            mensagem: 'Erro ao listar transportadoras',
             erro: erro.message
         });
     }

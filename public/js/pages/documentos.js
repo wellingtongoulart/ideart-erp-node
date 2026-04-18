@@ -115,8 +115,9 @@ function inicializarDocumentos() {
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
         filtros: [
             { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome...' },
-            { chave: 'tipo', tipo: 'select', opcoes: [
-                { valor: '', rotulo: 'Todos os tipos' },
+            { chave: 'tipo', tipo: 'select',
+              placeholder: 'Todos os tipos',
+              opcoes: [
                 { valor: 'contrato', rotulo: 'Contrato' },
                 { valor: 'fatura', rotulo: 'Fatura' },
                 { valor: 'recibo', rotulo: 'Recibo' },
@@ -125,14 +126,17 @@ function inicializarDocumentos() {
                 { valor: 'proposta', rotulo: 'Proposta' },
                 { valor: 'outro', rotulo: 'Outro' }
             ]},
-            { chave: 'referencia_tipo', tipo: 'select', opcoes: [
-                { valor: '', rotulo: 'Qualquer referência' },
+            { chave: 'referencia_tipo', tipo: 'select',
+              placeholder: 'Qualquer referência',
+              opcoes: [
                 { valor: 'cliente', rotulo: 'Cliente' },
                 { valor: 'pedido', rotulo: 'Pedido' },
                 { valor: 'orcamento', rotulo: 'Orçamento' },
                 { valor: 'profissional', rotulo: 'Profissional' },
                 { valor: 'outro', rotulo: 'Outro' }
-            ]}
+            ]},
+            { tipo: 'date-range', rotulo: 'Data',
+              chaveMin: 'data_inicio', chaveMax: 'data_fim' }
         ],
         colunas: [
             { chave: 'id', rotulo: 'ID', ordenavel: true, largura: '70px' },

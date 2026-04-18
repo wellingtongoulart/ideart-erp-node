@@ -102,7 +102,11 @@ export function inicializarClientes() {
         tamanhoPagina: 10,
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
         filtros: [
-            { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome, email ou telefone...' }
+            { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome, email ou telefone...' },
+            { chave: 'cidade', tipo: 'text', placeholder: 'Cidade...' },
+            { chave: 'estado', tipo: 'select',
+              placeholder: 'Todos os estados',
+              opcoesEndpoint: '/api/clientes/estados/lista' }
         ],
         colunas: [
             { chave: 'id', rotulo: 'ID', ordenavel: true, largura: '70px' },

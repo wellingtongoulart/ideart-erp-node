@@ -64,14 +64,20 @@ export function inicializarPedidos() {
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
         filtros: [
             { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nº ou cliente...' },
-            { chave: 'status', tipo: 'select', opcoes: [
-                { valor: '', rotulo: 'Todos os status' },
+            { chave: 'status', tipo: 'select',
+              placeholder: 'Todos os status',
+              opcoes: [
                 { valor: 'pendente', rotulo: 'Pendente' },
                 { valor: 'processando', rotulo: 'Processando' },
                 { valor: 'enviado', rotulo: 'Enviado' },
                 { valor: 'entregue', rotulo: 'Entregue' },
                 { valor: 'cancelado', rotulo: 'Cancelado' }
-            ]}
+            ]},
+            { tipo: 'date-range', rotulo: 'Data pedido',
+              chaveMin: 'data_pedido_inicio', chaveMax: 'data_pedido_fim' },
+            { tipo: 'number-range', rotulo: 'Valor',
+              chaveMin: 'valor_min', chaveMax: 'valor_max',
+              step: '0.01', placeholderMin: 'R$ mín', placeholderMax: 'R$ máx' }
         ],
         colunas: [
             { chave: 'numero', rotulo: 'Nº', ordenavel: true,

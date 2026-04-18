@@ -43,6 +43,15 @@ router.get('/', clientesController.listar);
 
 /**
  * @openapi
+ * /api/clientes/estados/lista:
+ *   get:
+ *     tags: [Clientes]
+ *     summary: Lista estados únicos de clientes
+ */
+router.get('/estados/lista', clientesController.estados);
+
+/**
+ * @openapi
  * /api/clientes/{id}:
  *   get:
  *     tags: [Clientes]

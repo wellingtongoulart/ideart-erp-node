@@ -119,7 +119,10 @@ export function inicializarProfissionais() {
         tamanhoPagina: 10,
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
         filtros: [
-            { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome, email ou CPF...' }
+            { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome, email ou CPF...' },
+            { chave: 'especialidade', tipo: 'select',
+              placeholder: 'Todas as especialidades',
+              opcoesEndpoint: '/api/profissionais/especialidades/lista' }
         ],
         colunas: [
             { chave: 'id', rotulo: 'ID', ordenavel: true, largura: '70px' },

@@ -62,12 +62,23 @@ export class DataTable {
             valoresFiltros: {}
         };
 
-        // inicializa valores padrão dos filtros
+        // inicializa valores padrão dos filtros.
+        // Cada filtro pode contribuir com uma ou várias chaves para o estado
+        // (ex.: number-range/date-range têm chaveMin e chaveMax).
         this.filtros.forEach(f => {
-            this.estado.valoresFiltros[f.chave] = f.valorPadrao || '';
+            this._chavesDoFiltro(f).forEach(ch => {
+                this.estado.valoresFiltros[ch] = f.valorPadrao?.[ch] || '';
+            });
         });
 
-        this._debounceBusca = null;
+        this._debounceBusca = {};
+    }
+
+    _chavesDoFiltro(f) {
+        if (f.tipo === 'number-range' || f.tipo === 'date-range') {
+            return [f.chaveMin, f.chaveMax].filter(Boolean);
+        }
+        return f.chave ? [f.chave] : [];
     }
 
     inicializar() {
@@ -108,32 +119,12 @@ export class DataTable {
         `;
 
         // wire de filtros
+        this.filtros.forEach(f => this._wireFiltro(f));
+
+        // carrega opções assíncronas dos selects (não bloqueia render inicial)
         this.filtros.forEach(f => {
-            const el = this.mount.querySelector(`[data-dt-filter="${f.chave}"]`);
-            if (!el) return;
-            if (f.tipo === 'text') {
-                el.addEventListener('input', (e) => {
-                    clearTimeout(this._debounceBusca);
-                    this._debounceBusca = setTimeout(() => {
-                        this.estado.valoresFiltros[f.chave] = e.target.value;
-                        this.estado.pagina = 1;
-                        this._recarregar();
-                    }, 300);
-                });
-                el.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        clearTimeout(this._debounceBusca);
-                        this.estado.valoresFiltros[f.chave] = e.target.value;
-                        this.estado.pagina = 1;
-                        this._recarregar();
-                    }
-                });
-            } else if (f.tipo === 'select') {
-                el.addEventListener('change', (e) => {
-                    this.estado.valoresFiltros[f.chave] = e.target.value;
-                    this.estado.pagina = 1;
-                    this._recarregar();
-                });
+            if (f.tipo === 'select' && f.opcoesEndpoint) {
+                this._carregarOpcoesSelect(f).catch(() => {});
             }
         });
 
@@ -156,27 +147,122 @@ export class DataTable {
 
     _renderizarFiltros() {
         if (this.filtros.length === 0) return '';
-        const campos = this.filtros.map(f => {
-            if (f.tipo === 'select') {
-                const opcoesHtml = (f.opcoes || [])
-                    .map(o => `<option value="${this._escapar(o.valor)}">${this._escapar(o.rotulo)}</option>`)
-                    .join('');
-                return `
-                    <select class="dt-filtro" data-dt-filter="${f.chave}" aria-label="${this._escapar(f.rotulo || f.chave)}">
-                        ${opcoesHtml}
-                    </select>
-                `;
-            }
-            // default: text
-            return `
-                <input type="text"
-                       class="dt-filtro"
-                       data-dt-filter="${f.chave}"
-                       placeholder="${this._escapar(f.placeholder || f.rotulo || 'Buscar...')}" />
-            `;
-        }).join('');
-
+        const campos = this.filtros.map(f => this._htmlDoFiltro(f)).join('');
         return `<div class="dt-filtros">${campos}</div>`;
+    }
+
+    _htmlDoFiltro(f) {
+        if (f.tipo === 'select') {
+            const opcoes = f.opcoes || [];
+            const placeholder = f.placeholder || f.rotulo || 'Todos';
+            // adiciona placeholder só se o próprio `opcoes` não incluir uma entrada com valor ''
+            const jaTemVazio = opcoes.some(o => o.valor === '' || o.valor == null);
+            const opcoesHtml = [
+                !jaTemVazio ? `<option value="">${this._escapar(placeholder)}</option>` : '',
+                ...opcoes.map(o => `<option value="${this._escapar(o.valor)}">${this._escapar(o.rotulo)}</option>`)
+            ].filter(Boolean).join('');
+            return `
+                <select class="dt-filtro" data-dt-filter="${f.chave}" aria-label="${this._escapar(f.rotulo || f.chave)}">
+                    ${opcoesHtml}
+                </select>
+            `;
+        }
+        if (f.tipo === 'number-range') {
+            const step = f.step || 'any';
+            return `
+                <div class="dt-filtro-grupo" aria-label="${this._escapar(f.rotulo || '')}">
+                    ${f.rotulo ? `<span class="dt-filtro-label">${this._escapar(f.rotulo)}</span>` : ''}
+                    <input type="number" class="dt-filtro dt-filtro-range" step="${this._escapar(step)}"
+                           data-dt-filter="${f.chaveMin}"
+                           placeholder="${this._escapar(f.placeholderMin || 'Mín')}" />
+                    <span class="dt-filtro-sep">–</span>
+                    <input type="number" class="dt-filtro dt-filtro-range" step="${this._escapar(step)}"
+                           data-dt-filter="${f.chaveMax}"
+                           placeholder="${this._escapar(f.placeholderMax || 'Máx')}" />
+                </div>
+            `;
+        }
+        if (f.tipo === 'date-range') {
+            return `
+                <div class="dt-filtro-grupo" aria-label="${this._escapar(f.rotulo || '')}">
+                    ${f.rotulo ? `<span class="dt-filtro-label">${this._escapar(f.rotulo)}</span>` : ''}
+                    <input type="date" class="dt-filtro dt-filtro-range"
+                           data-dt-filter="${f.chaveMin}"
+                           placeholder="${this._escapar(f.placeholderMin || 'De')}" />
+                    <span class="dt-filtro-sep">–</span>
+                    <input type="date" class="dt-filtro dt-filtro-range"
+                           data-dt-filter="${f.chaveMax}"
+                           placeholder="${this._escapar(f.placeholderMax || 'Até')}" />
+                </div>
+            `;
+        }
+        // default: text
+        return `
+            <input type="text"
+                   class="dt-filtro"
+                   data-dt-filter="${f.chave}"
+                   placeholder="${this._escapar(f.placeholder || f.rotulo || 'Buscar...')}" />
+        `;
+    }
+
+    _wireFiltro(f) {
+        const aplicar = (chave, valor) => {
+            this.estado.valoresFiltros[chave] = valor;
+            this.estado.pagina = 1;
+            this._recarregar();
+        };
+
+        if (f.tipo === 'text') {
+            const el = this.mount.querySelector(`[data-dt-filter="${f.chave}"]`);
+            if (!el) return;
+            el.addEventListener('input', (e) => {
+                clearTimeout(this._debounceBusca[f.chave]);
+                this._debounceBusca[f.chave] = setTimeout(() => aplicar(f.chave, e.target.value), 300);
+            });
+            el.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    clearTimeout(this._debounceBusca[f.chave]);
+                    aplicar(f.chave, e.target.value);
+                }
+            });
+        } else if (f.tipo === 'select') {
+            const el = this.mount.querySelector(`[data-dt-filter="${f.chave}"]`);
+            if (!el) return;
+            el.addEventListener('change', (e) => aplicar(f.chave, e.target.value));
+        } else if (f.tipo === 'number-range' || f.tipo === 'date-range') {
+            [f.chaveMin, f.chaveMax].forEach(chave => {
+                if (!chave) return;
+                const el = this.mount.querySelector(`[data-dt-filter="${chave}"]`);
+                if (!el) return;
+                el.addEventListener('change', (e) => aplicar(chave, e.target.value));
+                // number fields: reagir enquanto digita (com debounce)
+                if (f.tipo === 'number-range') {
+                    el.addEventListener('input', (e) => {
+                        clearTimeout(this._debounceBusca[chave]);
+                        this._debounceBusca[chave] = setTimeout(() => aplicar(chave, e.target.value), 400);
+                    });
+                }
+            });
+        }
+    }
+
+    async _carregarOpcoesSelect(f) {
+        try {
+            const res = await fetch(f.opcoesEndpoint);
+            const json = await res.json();
+            const extrair = f.opcoesExtrair || ((j) => (j.dados || []).map(v => ({
+                valor: typeof v === 'string' ? v : v.valor ?? v,
+                rotulo: typeof v === 'string' ? v : v.rotulo ?? v.valor ?? v
+            })));
+            const opcoes = extrair(json);
+            const el = this.mount.querySelector(`[data-dt-filter="${f.chave}"]`);
+            if (!el) return;
+            const placeholder = f.placeholder || f.rotulo || 'Todos';
+            el.innerHTML = [
+                `<option value="">${this._escapar(placeholder)}</option>`,
+                ...opcoes.map(o => `<option value="${this._escapar(o.valor)}">${this._escapar(o.rotulo)}</option>`)
+            ].join('');
+        } catch (_) { /* silencioso; filtro continua utilizável como texto vazio */ }
     }
 
     _renderizarCabecalho() {

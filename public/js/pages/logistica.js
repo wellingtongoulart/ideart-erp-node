@@ -111,16 +111,22 @@ function inicializarLogistica() {
         tamanhoPagina: 10,
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
         filtros: [
-            { chave: 'busca', tipo: 'text', placeholder: 'Buscar por rastreamento ou transportadora...' },
-            { chave: 'status', tipo: 'select', opcoes: [
-                { valor: '', rotulo: 'Todos os status' },
+            { chave: 'busca', tipo: 'text', placeholder: 'Buscar por rastreamento...' },
+            { chave: 'status', tipo: 'select',
+              placeholder: 'Todos os status',
+              opcoes: [
                 { valor: 'postado', rotulo: 'Postado' },
                 { valor: 'em_transito', rotulo: 'Em Trânsito' },
                 { valor: 'em_entrega', rotulo: 'Em Entrega' },
                 { valor: 'entregue', rotulo: 'Entregue' },
                 { valor: 'perdido', rotulo: 'Perdido' },
                 { valor: 'devolvido', rotulo: 'Devolvido' }
-            ]}
+            ]},
+            { chave: 'transportadora', tipo: 'select',
+              placeholder: 'Todas as transportadoras',
+              opcoesEndpoint: '/api/logistica/transportadoras/lista' },
+            { tipo: 'date-range', rotulo: 'Data envio',
+              chaveMin: 'data_envio_inicio', chaveMax: 'data_envio_fim' }
         ],
         colunas: [
             { chave: 'id', rotulo: 'ID', ordenavel: true, largura: '70px' },

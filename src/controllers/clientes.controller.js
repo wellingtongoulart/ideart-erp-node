@@ -15,7 +15,7 @@ const COLUNAS_ORDENACAO_CLIENTES = {
 // GET - Listar todos os clientes
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, busca = '', cidade = '', ordenarPor, ordem } = req.query;
+        const { pagina = 1, limite = 10, busca = '', cidade = '', estado = '', ordenarPor, ordem } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
@@ -29,8 +29,13 @@ exports.listar = async (req, res) => {
         }
 
         if (cidade) {
-            query += ' AND cidade = ?';
-            params.push(cidade);
+            query += ' AND cidade LIKE ?';
+            params.push(`%${cidade}%`);
+        }
+
+        if (estado) {
+            query += ' AND estado = ?';
+            params.push(estado);
         }
 
         const [countResult] = await connection.execute(
@@ -248,6 +253,31 @@ exports.deletar = async (req, res) => {
         res.status(500).json({
             sucesso: false,
             mensagem: 'Erro ao deletar cliente',
+            erro: erro.message
+        });
+    }
+};
+
+// GET - Listar estados únicos
+exports.estados = async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+
+        const [estados] = await connection.execute(
+            'SELECT DISTINCT estado FROM clientes WHERE estado IS NOT NULL AND estado != "" ORDER BY estado'
+        );
+
+        connection.release();
+
+        res.json({
+            sucesso: true,
+            mensagem: 'Estados listados com sucesso',
+            dados: estados.map(e => e.estado)
+        });
+    } catch (erro) {
+        res.status(500).json({
+            sucesso: false,
+            mensagem: 'Erro ao listar estados',
             erro: erro.message
         });
     }

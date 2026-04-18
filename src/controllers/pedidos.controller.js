@@ -16,7 +16,13 @@ const COLUNAS_ORDENACAO_PEDIDOS = {
 // GET - Listar todos os pedidos com filtros e paginação
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, busca = '', status = '', cliente_id = '', ordenarPor, ordem } = req.query;
+        const {
+            pagina = 1, limite = 10,
+            busca = '', status = '', cliente_id = '',
+            data_pedido_inicio = '', data_pedido_fim = '',
+            valor_min = '', valor_max = '',
+            ordenarPor, ordem
+        } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
@@ -45,6 +51,26 @@ exports.listar = async (req, res) => {
         if (cliente_id) {
             query += ' AND p.cliente_id = ?';
             params.push(cliente_id);
+        }
+
+        // Faixa de datas do pedido
+        if (data_pedido_inicio) {
+            query += ' AND p.data_pedido >= ?';
+            params.push(data_pedido_inicio);
+        }
+        if (data_pedido_fim) {
+            query += ' AND p.data_pedido <= ?';
+            params.push(data_pedido_fim);
+        }
+
+        // Faixa de valor total
+        if (valor_min !== '' && !isNaN(Number(valor_min))) {
+            query += ' AND p.valor_total >= ?';
+            params.push(Number(valor_min));
+        }
+        if (valor_max !== '' && !isNaN(Number(valor_max))) {
+            query += ' AND p.valor_total <= ?';
+            params.push(Number(valor_max));
         }
 
         // Contar total de registros para paginação

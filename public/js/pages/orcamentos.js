@@ -289,14 +289,22 @@ function inicializarTabelaOrcamentos() {
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
         filtros: [
             { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nº ou cliente...' },
-            { chave: 'status', tipo: 'select', opcoes: [
-                { valor: '', rotulo: 'Todos os status' },
+            { chave: 'status', tipo: 'select',
+              placeholder: 'Todos os status',
+              opcoes: [
                 { valor: 'pendente', rotulo: 'Pendente' },
                 { valor: 'aprovado', rotulo: 'Aprovado' },
                 { valor: 'recusado', rotulo: 'Recusado' },
                 { valor: 'expirado', rotulo: 'Expirado' },
                 { valor: 'convertido', rotulo: 'Convertido' }
-            ]}
+            ]},
+            { tipo: 'date-range', rotulo: 'Data criação',
+              chaveMin: 'data_criacao_inicio', chaveMax: 'data_criacao_fim' },
+            { tipo: 'date-range', rotulo: 'Validade',
+              chaveMin: 'data_validade_inicio', chaveMax: 'data_validade_fim' },
+            { tipo: 'number-range', rotulo: 'Valor',
+              chaveMin: 'valor_min', chaveMax: 'valor_max',
+              step: '0.01', placeholderMin: 'R$ mín', placeholderMax: 'R$ máx' }
         ],
         colunas: [
             { chave: 'numero', rotulo: 'Nº', ordenavel: true,
