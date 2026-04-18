@@ -51,6 +51,7 @@ async function login(req, res) {
                 id: usuario.id,
                 username: usuario.username,
                 email: usuario.email,
+                name: usuario.nome,
                 funcao: usuario.funcao
             }
         });
@@ -128,9 +129,40 @@ async function obterUsuario(req, res) {
     }
 }
 
+// ===== OBTER USUÁRIO LOGADO =====
+async function obterUsuarioLogado(req, res) {
+    try {
+        const { id } = req.query; // Recebe id como query param
+        const connection = await pool.getConnection();
+        const [usuarios] = await connection.query(
+            'SELECT id, nome, username, email, funcao FROM usuarios WHERE id = ?',
+            [id]
+        );
+        connection.release();
+
+        if (usuarios.length === 0) {
+            return res.status(404).json({
+                sucesso: false,
+                mensagem: 'Usuário não encontrado'
+            });
+        }
+
+        return res.json({
+            sucesso: true,
+            usuario: usuarios[0]
+        });
+    } catch (erro) {
+        return res.status(500).json({
+            sucesso: false,
+            mensagem: 'Erro ao obter usuário'
+        });
+    }
+}
+
 module.exports = {
     login,
     logout,
     listarUsuarios,
-    obterUsuario
+    obterUsuario,
+    obterUsuarioLogado
 };
