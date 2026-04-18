@@ -115,27 +115,27 @@ function validarCPF(cpf) {
     cpf = cpf.replace(/\D/g, '');
     if (cpf.length !== 11) return false;
     if (/^(\d)\1{10}$/.test(cpf)) return false;
-    
+
     let soma = 0;
     let resto;
-    
+
     for (let i = 1; i <= 9; i++) {
         soma += parseInt(cpf.substring(i - 1, i)) * (11 - i);
     }
-    
+
     resto = (soma * 10) % 11;
     if (resto === 10 || resto === 11) resto = 0;
     if (resto !== parseInt(cpf.substring(9, 10))) return false;
-    
+
     soma = 0;
     for (let i = 1; i <= 10; i++) {
         soma += parseInt(cpf.substring(i - 1, i)) * (12 - i);
     }
-    
+
     resto = (soma * 10) % 11;
     if (resto === 10 || resto === 11) resto = 0;
     if (resto !== parseInt(cpf.substring(10, 11))) return false;
-    
+
     return true;
 }
 
@@ -334,45 +334,109 @@ function initializeUserProfile() {
         const userStr = localStorage.getItem(APP_CONFIG.userKey);
         if (userStr) {
             const user = JSON.parse(userStr);
-            
-            // Atualizar avatar
-            const userAvatarEl = getElementById('userAvatar');
-            if (userAvatarEl) {
-                userAvatarEl.src = user.avatar || 'https://via.placeholder.com/40';
-            }
-            
-            // Atualizar nome
-            const userNameEl = getElementById('userName');
-            if (userNameEl) {
-                userNameEl.textContent = user.name || 'Usuário';
-            }
-            
-            // Atualizar papel/role
-            const userRoleEl = getElementById('userRole');
-            if (userRoleEl) {
-                userRoleEl.textContent = user.funcao || 'Usuário';
-            }
-            
-            // Atualizar última acesso
-            const lastAccessEl = getElementById('lastAccess');
-            if (lastAccessEl && user.lastAccess) {
-                lastAccessEl.textContent = new Date(user.lastAccess).toLocaleString('pt-BR');
-            }
-            
-            // Atualizar nome no dropdown
-            const dropdownUserName = getElementById('dropdownUserName');
-            if (dropdownUserName) {
-                dropdownUserName.textContent = user.name || 'Usuário';
-            }
-            
-            // Atualizar email no dropdown
-            const dropdownUserEmail = getElementById('dropdownUserEmail');
-            if (dropdownUserEmail) {
-                dropdownUserEmail.textContent = user.email || 'usuario@email.com';
-            }
+
+            // Buscar dados atualizados do banco
+            fetch(`/api/autenticacao/user/me?id=${user.id}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        const dbUser = data.usuario;
+
+                        // Atualizar localStorage com dados do banco
+                        const updatedUser = {
+                            ...user,
+                            name: dbUser.nome,
+                            role: dbUser.funcao,
+                            email: dbUser.email
+                        };
+                        localStorage.setItem(APP_CONFIG.userKey, JSON.stringify(updatedUser));
+
+                        // Atualizar avatar
+                        const userAvatarEl = getElementById('userAvatar');
+                        if (userAvatarEl) {
+                            userAvatarEl.textContent = (dbUser.nome || 'U').charAt(0).toUpperCase();
+                            userAvatarEl.title = dbUser.nome || 'Usuário'; // Tooltip com nome completo
+                        }
+
+                        // Atualizar nome
+                        const userNameEl = getElementById('userName');
+                        if (userNameEl) {
+                            userNameEl.textContent = dbUser.nome || 'Usuário';
+                        }
+
+                        // Atualizar papel/role
+                        const userRoleEl = getElementById('userRole');
+                        if (userRoleEl) {
+                            userRoleEl.textContent = dbUser.funcao || 'Usuário';
+                        }
+
+                        // Atualizar última acesso
+                        const lastAccessEl = getElementById('lastAccess');
+                        if (lastAccessEl && user.lastAccess) {
+                            lastAccessEl.textContent = new Date(user.lastAccess).toLocaleString('pt-BR');
+                        }
+
+                        // Atualizar nome no dropdown
+                        const dropdownUserName = getElementById('dropdownUserName');
+                        if (dropdownUserName) {
+                            dropdownUserName.textContent = dbUser.nome || 'Usuário';
+                        }
+
+                        // Atualizar email no dropdown
+                        const dropdownUserEmail = getElementById('dropdownUserEmail');
+                        if (dropdownUserEmail) {
+                            dropdownUserEmail.textContent = dbUser.email || 'usuario@email.com';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao buscar dados do usuário:', error);
+                    // Fallback para localStorage
+                    updateFromLocalStorage(user);
+                });
         }
     } catch (error) {
         console.error('Erro ao inicializar perfil:', error);
+    }
+}
+
+// Função auxiliar para fallback
+function updateFromLocalStorage(user) {
+    // Atualizar avatar
+    const userAvatarEl = getElementById('userAvatar');
+    if (userAvatarEl) {
+        userAvatarEl.textContent = (user.nome || 'U').charAt(0).toUpperCase();
+        userAvatarEl.title = user.nome || 'Usuário';
+    }
+
+    // Atualizar nome
+    const userNameEl = getElementById('userName');
+    if (userNameEl) {
+        userNameEl.textContent = user.nome || 'Usuário';
+    }
+
+    // Atualizar papel/role
+    const userRoleEl = getElementById('userRole');
+    if (userRoleEl) {
+        userRoleEl.textContent = user.role || 'Usuário';
+    }
+
+    // Atualizar última acesso
+    const lastAccessEl = getElementById('lastAccess');
+    if (lastAccessEl && user.lastAccess) {
+        lastAccessEl.textContent = new Date(user.lastAccess).toLocaleString('pt-BR');
+    }
+
+    // Atualizar nome no dropdown
+    const dropdownUserName = getElementById('dropdownUserName');
+    if (dropdownUserName) {
+        dropdownUserName.textContent = user.nome || 'Usuário';
+    }
+
+    // Atualizar email no dropdown
+    const dropdownUserEmail = getElementById('dropdownUserEmail');
+    if (dropdownUserEmail) {
+        dropdownUserEmail.textContent = user.email || 'usuario@email.com';
     }
 }
 

@@ -346,7 +346,7 @@ function createSession(user) {
         id: user.id,
         username: user.username,
         email: user.email,
-        name: user.name,
+        name: user.nome,
         role: user.funcao,
         avatar: user.avatar,
         lastAccess: new Date().toISOString()

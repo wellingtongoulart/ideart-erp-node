@@ -123,4 +123,7 @@ router.get('/usuarios', autenticacaoController.listarUsuarios);
  */
 router.get('/usuarios/:id', autenticacaoController.obterUsuario);
 
+// Obter dados do usuário logado (usando ID do frontend)
+router.get('/user/me', autenticacaoController.obterUsuarioLogado);
+
 module.exports = router;

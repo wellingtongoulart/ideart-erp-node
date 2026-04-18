@@ -546,7 +546,7 @@ const pages = {
             </div>
             <div class="grid">
                 <div class="grid-item">
-                    <i class="fas fa-chart-line"></i>
+                    <i class="fas fa-lightbulb"></i>
                     <h3>Relatório de Vendas</h3>
                     <p>Análise detalhada de vendas por período</p>
                     <button class="btn btn-primary" style="margin-top: 1rem;">Ver Relatório</button>
@@ -592,37 +592,38 @@ function initializeUserProfile() {
         const userStr = localStorage.getItem('ideart_user');
         if (userStr) {
             const user = JSON.parse(userStr);
-            
+
             // Atualizar avatar
             const userAvatarEl = document.getElementById('userAvatar');
             if (userAvatarEl) {
-                userAvatarEl.src = user.avatar || 'https://via.placeholder.com/40';
+                userAvatarEl.textContent = (user.nome || 'U').charAt(0).toUpperCase();
+                userAvatarEl.title = user.nome || 'Usuário'; // Tooltip com nome completo
             }
-            
+
             // Atualizar nome
             const userNameEl = document.getElementById('userName');
             if (userNameEl) {
-                userNameEl.textContent = user.name || 'Usuário';
+                userNameEl.textContent = user.nome || 'Usuário';
             }
-            
+
             // Atualizar papel/role
             const userRoleEl = document.getElementById('userRole');
             if (userRoleEl) {
                 userRoleEl.textContent = user.funcao || 'Usuário';
             }
-            
+
             // Atualizar data de última acesso
             const lastAccessEl = document.getElementById('lastAccess');
             if (lastAccessEl && user.lastAccess) {
                 lastAccessEl.textContent = new Date(user.lastAccess).toLocaleString('pt-BR');
             }
-            
+
             // Atualizar nome no dropdown
             const dropdownUserName = document.getElementById('dropdownUserName');
             if (dropdownUserName) {
-                dropdownUserName.textContent = user.name || 'Usuário';
+                dropdownUserName.textContent = user.nome || 'Usuário';
             }
-            
+
             // Atualizar email no dropdown
             const dropdownUserEmail = document.getElementById('dropdownUserEmail');
             if (dropdownUserEmail) {
@@ -647,7 +648,7 @@ function toggleUserDropdown(e) {
 function closeUserDropdown(e) {
     const dropdown = document.getElementById('userDropdown');
     const userMenuBtn = document.querySelector('[onclick*="toggleUserDropdown"]');
-    
+
     if (dropdown && userMenuBtn) {
         if (!dropdown.contains(e.target) && !userMenuBtn.contains(e.target)) {
             dropdown.style.display = 'none';
@@ -658,13 +659,13 @@ function closeUserDropdown(e) {
 // Função para fazer logout
 function handleLogout(e) {
     e.preventDefault();
-    
+
     if (confirm('Tem certeza que deseja sair?')) {
         // Limpar dados do usuário
         localStorage.removeItem('ideart_user');
         localStorage.removeItem('ideart_remembered_username');
         sessionStorage.removeItem('ideart_session');
-        
+
         // Redirecionar para login
         window.location.href = 'login.html';
     }
@@ -674,7 +675,7 @@ function handleLogout(e) {
 function toggleSidebarSize() {
     const sidebar = document.getElementById('sidebar');
     sidebar.classList.toggle('minimized');
-    
+
     // Salvar preferência
     const isMinimized = sidebar.classList.contains('minimized');
     localStorage.setItem(APP_CONFIG.sidebarMinimized, isMinimized);
@@ -684,7 +685,7 @@ function toggleSidebarSize() {
 function restoreSidebarState() {
     const sidebar = document.getElementById('sidebar');
     const isMinimized = localStorage.getItem(APP_CONFIG.sidebarMinimized) === 'true';
-    
+
     if (isMinimized) {
         sidebar.classList.add('minimized');
     }
@@ -800,7 +801,7 @@ function carregarProdutos() {
 function abrirModalNovoProduto() {
     const modal = document.getElementById('modalNovoProduto');
     const form = document.getElementById('formNovoProduto');
-    
+
     if (form) {
         form.reset();
     }
@@ -871,7 +872,7 @@ function salvarNovoProduto(e) {
         .then(data => {
             if (data.sucesso) {
                 mostrarMensagemProduto('Produto criado com sucesso!', 'sucesso');
-                
+
                 setTimeout(() => {
                     fecharModalProduto();
                     carregarProdutos();
@@ -937,10 +938,10 @@ function limparMensagemProduto() {
 document.addEventListener('DOMContentLoaded', () => {
     // Restaurar estado do sidebar
     restoreSidebarState();
-    
+
     // Inicializar perfil do usuário
     initializeUserProfile();
-    
+
     // Carregar página inicial
     loadPage('dashboard');
 
@@ -956,7 +957,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Toggle sidebar
     const toggleSidebar = document.getElementById('toggleSidebar');
     const sidebar = document.querySelector('.sidebar');
-    
+
     if (toggleSidebar) {
         toggleSidebar.addEventListener('click', () => {
             sidebar.classList.toggle('active');
@@ -971,15 +972,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
-    
+
     // Event listeners para dropdown de usuário
     const userMenuBtn = document.getElementById('userMenuBtn');
     const userDropdown = document.getElementById('userDropdown');
-    
+
     if (userMenuBtn) {
         userMenuBtn.addEventListener('click', toggleUserDropdown);
     }
-    
+
     // Fechar dropdown ao clicar fora
     document.addEventListener('click', (e) => {
         if (userDropdown && userMenuBtn) {
@@ -988,13 +989,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
-    
+
     // Event listener para botão "Sair" do dropdown
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', handleLogout);
     }
-    
+
     // Event listener para botão "Alterar Senha"
     const changePasswordBtn = document.getElementById('changePasswordBtn');
     if (changePasswordBtn) {
@@ -1005,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Aqui iremos adicionar modal de alterar senha no futuro
         });
     }
-    
+
     // Event listener para botão de toggle sidebar
     const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
     if (sidebarToggleBtn) {
