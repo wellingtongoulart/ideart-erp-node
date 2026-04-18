@@ -3,6 +3,10 @@
  * Gerenciamento de documentos do sistema
  */
 
+import { DataTable } from '../data-table.js';
+
+let tabelaDocumentos = null;
+
 const documentosPage = {
     title: 'Documentos',
     content: `
@@ -16,23 +20,7 @@ const documentosPage = {
                     <i class="fas fa-search"></i> Buscar
                 </button>
             </div>
-            <div class="table-wrapper">
-                <table id="documentosTable">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Nome</th>
-                            <th>Tipo</th>
-                            <th>Referência</th>
-                            <th>Data</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="documentosTbody">
-                        <!-- Carregado dinamicamente -->
-                    </tbody>
-                </table>
-            </div>
+            <div id="documentosTableMount"></div>
         </div>
 
         <!-- Modal de Novo Documento -->
@@ -119,22 +107,58 @@ function inicializarDocumentos() {
     const cancelarDocumentoBtn = document.getElementById('cancelarDocumentoBtn');
     const salvarDocumentoBtn = document.getElementById('salvarDocumentoBtn');
     const modalNovoDocumento = document.getElementById('modalNovoDocumento');
-    const buscaBtns = document.querySelectorAll('button:has(i.fa-search)');
 
-    // Carregar lista de documentos
-    carregarDocumentos();
+    tabelaDocumentos = new DataTable({
+        mount: document.getElementById('documentosTableMount'),
+        endpoint: '/api/documentos',
+        tamanhoPagina: 10,
+        ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtros: [
+            { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome...' },
+            { chave: 'tipo', tipo: 'select', opcoes: [
+                { valor: '', rotulo: 'Todos os tipos' },
+                { valor: 'contrato', rotulo: 'Contrato' },
+                { valor: 'fatura', rotulo: 'Fatura' },
+                { valor: 'recibo', rotulo: 'Recibo' },
+                { valor: 'nota_fiscal', rotulo: 'Nota Fiscal' },
+                { valor: 'relatorio', rotulo: 'Relatório' },
+                { valor: 'proposta', rotulo: 'Proposta' },
+                { valor: 'outro', rotulo: 'Outro' }
+            ]},
+            { chave: 'referencia_tipo', tipo: 'select', opcoes: [
+                { valor: '', rotulo: 'Qualquer referência' },
+                { valor: 'cliente', rotulo: 'Cliente' },
+                { valor: 'pedido', rotulo: 'Pedido' },
+                { valor: 'orcamento', rotulo: 'Orçamento' },
+                { valor: 'profissional', rotulo: 'Profissional' },
+                { valor: 'outro', rotulo: 'Outro' }
+            ]}
+        ],
+        colunas: [
+            { chave: 'id', rotulo: 'ID', ordenavel: true, largura: '70px' },
+            { chave: 'nome', rotulo: 'Nome', ordenavel: true },
+            { chave: 'tipo', rotulo: 'Tipo', ordenavel: true,
+              formatar: (d) => d.tipo || '-' },
+            { chave: 'referencia_tipo', rotulo: 'Referência', ordenavel: true,
+              formatar: (d) => d.referencia_tipo ? `${d.referencia_tipo} (#${d.referencia_id})` : '-' },
+            { chave: 'data_criacao', rotulo: 'Data', ordenavel: true,
+              formatar: (d) => d.data_criacao ? new Date(d.data_criacao).toLocaleDateString('pt-BR') : '-' }
+        ],
+        acoes: (d) => `
+            <button class="btn btn-primary btn-small" onclick="verDocumento(${d.id})">
+                <i class="fas fa-eye"></i> Ver
+            </button>
+            <button class="btn btn-secondary btn-small" onclick="deletarDocumento(${d.id})">
+                <i class="fas fa-trash"></i> Deletar
+            </button>
+        `
+    });
+    tabelaDocumentos.inicializar();
 
-    // Abrir modal para novo documento
     if (novoDocumentoBtn) {
         novoDocumentoBtn.addEventListener('click', abrirModalNovoDocumento);
     }
 
-    // Buscar documentos
-    buscaBtns.forEach(btn => {
-        btn.addEventListener('click', abrirBuscaDocumentos);
-    });
-
-    // Fechar modal
     if (fecharModalBtn) {
         fecharModalBtn.addEventListener('click', fecharModalDocumento);
     }
@@ -143,12 +167,10 @@ function inicializarDocumentos() {
         cancelarDocumentoBtn.addEventListener('click', fecharModalDocumento);
     }
 
-    // Salvar documento
     if (salvarDocumentoBtn) {
         salvarDocumentoBtn.addEventListener('click', salvarNovoDocumento);
     }
 
-    // Fechar modal ao clicar fora
     if (modalNovoDocumento) {
         window.addEventListener('click', (event) => {
             if (event.target === modalNovoDocumento) {
@@ -158,47 +180,8 @@ function inicializarDocumentos() {
     }
 }
 
-/**
- * Carrega a lista de documentos do servidor
- */
-function carregarDocumentos() {
-    fetch('/api/documentos')
-        .then(response => response.json())
-        .then(data => {
-            if (data.sucesso && data.dados) {
-                const tbody = document.getElementById('documentosTbody');
-                if (!tbody) return;
-
-                tbody.innerHTML = '';
-
-                data.dados.forEach(documento => {
-                    const row = document.createElement('tr');
-                    const dataFormatada = documento.data_documento ? new Date(documento.data_documento).toLocaleDateString('pt-BR') : '-';
-                    const referencia = documento.referencia_tipo ? `${documento.referencia_tipo} (#${documento.referencia_id})` : '-';
-
-                    row.innerHTML = `
-                        <td>${documento.id}</td>
-                        <td>${documento.nome}</td>
-                        <td>${documento.tipo || '-'}</td>
-                        <td>${referencia}</td>
-                        <td>${dataFormatada}</td>
-                        <td>
-                            <button class="btn btn-primary btn-small" onclick="verDocumento(${documento.id})">
-                                <i class="fas fa-eye"></i> Ver
-                            </button>
-                            <button class="btn btn-secondary btn-small" onclick="deletarDocumento(${documento.id})">
-                                <i class="fas fa-trash"></i> Deletar
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            }
-        })
-        .catch(erro => {
-            console.error('Erro ao carregar documentos:', erro);
-            alert('Erro ao carregar documentos');
-        });
+function recarregarTabela() {
+    if (tabelaDocumentos) tabelaDocumentos.recarregar();
 }
 
 /**
@@ -254,7 +237,7 @@ function salvarNovoDocumento() {
             if (data.sucesso) {
                 alert('Documento salvo com sucesso!');
                 fecharModalDocumento();
-                carregarDocumentos();
+                recarregarTabela();
             } else {
                 mostrarMensagemDocumento(data.mensagem || 'Erro ao salvar documento', 'error');
             }
@@ -284,7 +267,7 @@ function deletarDocumento(id) {
             .then(data => {
                 if (data.sucesso) {
                     alert('Documento deletado com sucesso!');
-                    carregarDocumentos();
+                    recarregarTabela();
                 } else {
                     alert(data.mensagem || 'Erro ao deletar documento');
                 }
@@ -308,45 +291,5 @@ function mostrarMensagemDocumento(mensagem, tipo) {
     messageEl.style.display = 'block';
 }
 
-/**
- * Abre o modal de busca de documentos
- */
-function abrirBuscaDocumentos() {
-    if (!window.buscaDocumentos) {
-        window.buscaDocumentos = new BuscaAvancada({
-            endpoint: '/api/documentos',
-            titulo: 'Buscar Documentos',
-            campos: ['nome', 'tipo', 'referencia_tipo'],
-            onResultado: (documento) => {
-                // Scroll até a tabela
-                const table = document.getElementById('documentosTable');
-                if (table) {
-                    table.scrollIntoView({ behavior: 'smooth' });
-
-                    // Destaca a linha do documento encontrado
-                    setTimeout(() => {
-                        const linhas = document.querySelectorAll('#documentosTbody tr');
-                        linhas.forEach(linha => {
-                            const idCell = linha.querySelector('td:first-child');
-                            if (idCell && idCell.textContent == documento.id) {
-                                linha.style.background = '#fff9c4';
-                                setTimeout(() => {
-                                    linha.style.background = '';
-                                }, 3000);
-                            }
-                        });
-                    }, 500);
-                }
-            }
-        });
-    }
-    window.buscaDocumentos.abrir();
-}
-
-/**
- * Abre modal para criar novo documento
- */
-function abrirModalNovoDocumento() {
-    mostrarAviso('Funcionalidade de novo documento em desenvolvimento!');
-    // TODO: Implementar novo documento
-}
+window.verDocumento = verDocumento;
+window.deletarDocumento = deletarDocumento;

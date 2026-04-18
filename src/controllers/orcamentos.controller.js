@@ -1,5 +1,17 @@
 // Controller de Orçamentos
 const pool = require('../config/database');
+const { montarOrderBy } = require('../utils/ordenacao');
+
+const COLUNAS_ORDENACAO_ORCAMENTOS = {
+    id: 'o.id',
+    numero: 'o.numero',
+    cliente_nome: 'c.nome',
+    data_criacao: 'o.data_criacao',
+    data_validade: 'o.data_validade',
+    valor_total: 'o.valor_total',
+    status: 'o.status',
+    criado_em: 'o.criado_em'
+};
 
 function gerarNumeroOrcamento() {
     return `ORC${Date.now()}`;
@@ -54,7 +66,7 @@ async function substituirItensOrcamento(connection, orcamentoId, itens) {
 // GET - Listar orçamentos com paginação e filtros
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, status = '', cliente_id = '', busca = '' } = req.query;
+        const { pagina = 1, limite = 10, status = '', cliente_id = '', busca = '', ordenarPor, ordem } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
@@ -85,7 +97,12 @@ exports.listar = async (req, res) => {
         const [countResult] = await connection.execute(countQuery, params);
         const totalRegistros = countResult[0].total;
 
-        query += ' ORDER BY o.criado_em DESC LIMIT ? OFFSET ?';
+        const orderBy = montarOrderBy({
+            ordenarPor, ordem,
+            colunasPermitidas: COLUNAS_ORDENACAO_ORCAMENTOS,
+            padrao: 'o.criado_em DESC'
+        });
+        query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
         params.push(parseInt(limite), offset);
 
         const [orcamentos] = await connection.query(query, params);

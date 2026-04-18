@@ -1,14 +1,25 @@
 // Controller de Clientes
 const pool = require('../config/database');
+const { montarOrderBy } = require('../utils/ordenacao');
+
+const COLUNAS_ORDENACAO_CLIENTES = {
+    id: 'id',
+    nome: 'nome',
+    email: 'email',
+    telefone: 'telefone',
+    cidade: 'cidade',
+    estado: 'estado',
+    criado_em: 'criado_em'
+};
 
 // GET - Listar todos os clientes
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, busca = '', cidade = '' } = req.query;
+        const { pagina = 1, limite = 10, busca = '', cidade = '', ordenarPor, ordem } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
-        
+
         let query = 'SELECT * FROM clientes WHERE 1=1';
         let params = [];
 
@@ -28,7 +39,12 @@ exports.listar = async (req, res) => {
         );
         const totalRegistros = countResult[0].total;
 
-        query += ' ORDER BY criado_em DESC LIMIT ? OFFSET ?';
+        const orderBy = montarOrderBy({
+            ordenarPor, ordem,
+            colunasPermitidas: COLUNAS_ORDENACAO_CLIENTES,
+            padrao: 'criado_em DESC'
+        });
+        query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
         params.push(parseInt(limite), offset);
 
         const [clientes] = await connection.query(query, params);

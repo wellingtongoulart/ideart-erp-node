@@ -1,14 +1,27 @@
 // Controller de Profissionais
 const pool = require('../config/database');
+const { montarOrderBy } = require('../utils/ordenacao');
+
+const COLUNAS_ORDENACAO_PROFISSIONAIS = {
+    id: 'id',
+    nome: 'nome',
+    especialidade: 'especialidade',
+    email: 'email',
+    telefone: 'telefone',
+    cpf: 'cpf',
+    data_admissao: 'data_admissao',
+    salario: 'salario',
+    criado_em: 'criado_em'
+};
 
 // GET - Listar todos os profissionais
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, busca = '', especialidade = '' } = req.query;
+        const { pagina = 1, limite = 10, busca = '', especialidade = '', ordenarPor, ordem } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
-        
+
         let query = 'SELECT * FROM profissionais WHERE 1=1';
         let params = [];
 
@@ -28,7 +41,12 @@ exports.listar = async (req, res) => {
         );
         const totalRegistros = countResult[0].total;
 
-        query += ' ORDER BY criado_em DESC LIMIT ? OFFSET ?';
+        const orderBy = montarOrderBy({
+            ordenarPor, ordem,
+            colunasPermitidas: COLUNAS_ORDENACAO_PROFISSIONAIS,
+            padrao: 'criado_em DESC'
+        });
+        query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
         params.push(parseInt(limite), offset);
 
         const [profissionais] = await connection.query(query, params);

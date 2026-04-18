@@ -5,6 +5,9 @@
 
 import { abrirEdicao } from '../edit-modal.js';
 import { BuscaAvancada } from '../busca-avancada.js';
+import { DataTable } from '../data-table.js';
+
+let tabelaProfissionais = null;
 
 export const profissionaisPage = {
     title: 'Profissionais',
@@ -19,23 +22,7 @@ export const profissionaisPage = {
                     <i class="fas fa-search"></i> Buscar
                 </button>
             </div>
-            <div class="table-wrapper">
-                <table id="profissionaisTable">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Nome</th>
-                            <th>Especialidade</th>
-                            <th>Email</th>
-                            <th>Telefone</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="profissionaisTbody">
-                        <!-- Carregado dinamicamente -->
-                    </tbody>
-                </table>
-            </div>
+            <div id="profissionaisTableMount"></div>
         </div>
 
         <!-- Modal de Novo Profissional -->
@@ -126,8 +113,34 @@ export function inicializarProfissionais() {
     const modalNovoProfissional = document.getElementById('modalNovoProfissional');
     const buscaBtns = document.querySelectorAll('button:has(i.fa-search)');
 
-    // Carregar lista de profissionais
-    carregarProfissionais();
+    tabelaProfissionais = new DataTable({
+        mount: document.getElementById('profissionaisTableMount'),
+        endpoint: '/api/profissionais',
+        tamanhoPagina: 10,
+        ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtros: [
+            { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome, email ou CPF...' }
+        ],
+        colunas: [
+            { chave: 'id', rotulo: 'ID', ordenavel: true, largura: '70px' },
+            { chave: 'nome', rotulo: 'Nome', ordenavel: true },
+            { chave: 'especialidade', rotulo: 'Especialidade', ordenavel: true,
+              formatar: (p) => p.especialidade || '-' },
+            { chave: 'email', rotulo: 'Email', ordenavel: true,
+              formatar: (p) => p.email || '-' },
+            { chave: 'telefone', rotulo: 'Telefone', ordenavel: true,
+              formatar: (p) => p.telefone || '-' }
+        ],
+        acoes: (p) => `
+            <button class="btn btn-primary btn-small" onclick="editarProfissional(${p.id})">
+                <i class="fas fa-edit"></i> Editar
+            </button>
+            <button class="btn btn-secondary btn-small" onclick="deletarProfissional(${p.id})">
+                <i class="fas fa-trash"></i> Deletar
+            </button>
+        `
+    });
+    tabelaProfissionais.inicializar();
 
     // Abrir modal para novo profissional
     if (novoProfissionalBtn) {
@@ -163,44 +176,8 @@ export function inicializarProfissionais() {
     }
 }
 
-/**
- * Carrega a lista de profissionais do servidor
- */
-function carregarProfissionais() {
-    fetch('/api/profissionais')
-        .then(response => response.json())
-        .then(data => {
-            if (data.sucesso && data.dados) {
-                const tbody = document.getElementById('profissionaisTbody');
-                if (!tbody) return;
-
-                tbody.innerHTML = '';
-
-                data.dados.forEach(profissional => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${profissional.id}</td>
-                        <td>${profissional.nome}</td>
-                        <td>${profissional.especialidade || '-'}</td>
-                        <td>${profissional.email || '-'}</td>
-                        <td>${profissional.telefone || '-'}</td>
-                        <td>
-                            <button class="btn btn-primary btn-small" onclick="editarProfissional(${profissional.id})">
-                                <i class="fas fa-edit"></i> Editar
-                            </button>
-                            <button class="btn btn-secondary btn-small" onclick="deletarProfissional(${profissional.id})">
-                                <i class="fas fa-trash"></i> Deletar
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            }
-        })
-        .catch(erro => {
-            console.error('Erro ao carregar profissionais:', erro);
-            alert('Erro ao carregar profissionais');
-        });
+function recarregarTabela() {
+    if (tabelaProfissionais) tabelaProfissionais.recarregar();
 }
 
 /**
@@ -256,7 +233,7 @@ function salvarNovoProfissional() {
             if (data.sucesso) {
                 alert('Profissional salvo com sucesso!');
                 fecharModalProfissional();
-                carregarProfissionais();
+                recarregarTabela();
             } else {
                 mostrarMensagemProfissional(data.mensagem || 'Erro ao salvar profissional', 'error');
             }
@@ -286,7 +263,7 @@ export function deletarProfissional(id) {
             .then(data => {
                 if (data.sucesso) {
                     alert('Profissional deletado com sucesso!');
-                    carregarProfissionais();
+                    recarregarTabela();
                 } else {
                     alert(data.mensagem || 'Erro ao deletar profissional');
                 }
@@ -320,14 +297,11 @@ function abrirBuscaProfissionais() {
             titulo: 'Buscar Profissionais',
             campos: ['nome', 'especialidade', 'email'],
             onResultado: (profissional) => {
-                // Scroll até a tabela
-                const table = document.getElementById('profissionaisTable');
-                if (table) {
-                    table.scrollIntoView({ behavior: 'smooth' });
-
-                    // Destaca a linha do profissional encontrado
+                const mount = document.getElementById('profissionaisTableMount');
+                if (mount) {
+                    mount.scrollIntoView({ behavior: 'smooth' });
                     setTimeout(() => {
-                        const linhas = document.querySelectorAll('#profissionaisTbody tr');
+                        const linhas = mount.querySelectorAll('tbody tr');
                         linhas.forEach(linha => {
                             const idCell = linha.querySelector('td:first-child');
                             if (idCell && idCell.textContent == profissional.id) {

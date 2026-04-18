@@ -5,6 +5,9 @@
  */
 
 import { formatarMoeda, formatarData } from '../utils.js';
+import { DataTable } from '../data-table.js';
+
+let tabelaPedidos = null;
 
 export const pedidosPage = {
     title: 'Pedidos',
@@ -24,35 +27,7 @@ export const pedidosPage = {
                 Os pedidos são gerados automaticamente a partir da <strong>aprovação de orçamentos</strong>. Use a tela de Orçamentos para criar novos pedidos.
             </div>
 
-            <div class="filters-row">
-                <input type="text" id="pedFiltroBusca" placeholder="Buscar por nº ou cliente..." />
-                <select id="pedFiltroStatus">
-                    <option value="">Todos os status</option>
-                    <option value="pendente">Pendente</option>
-                    <option value="processando">Processando</option>
-                    <option value="enviado">Enviado</option>
-                    <option value="entregue">Entregue</option>
-                    <option value="cancelado">Cancelado</option>
-                </select>
-                <button class="btn btn-secondary" id="pedFiltrarBtn"><i class="fas fa-search"></i> Filtrar</button>
-            </div>
-
-            <div class="table-wrapper">
-                <table id="pedidosTable">
-                    <thead>
-                        <tr>
-                            <th>Nº</th>
-                            <th>Orçamento</th>
-                            <th>Cliente</th>
-                            <th>Data</th>
-                            <th>Total</th>
-                            <th>Status</th>
-                            <th style="width: 200px;">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pedidosTbody"></tbody>
-                </table>
-            </div>
+            <div id="pedidosTableMount"></div>
         </div>
 
         <!-- Modal de detalhes/edição do pedido -->
@@ -77,64 +52,59 @@ const pedState = {
     pedidoAtual: null
 };
 
+const STATUS_PEDIDO_OPCOES = ['pendente', 'processando', 'enviado', 'entregue', 'cancelado'];
+
 export function inicializarPedidos() {
-    carregarPedidos();
     adicionarEstilosPedidos();
 
+    tabelaPedidos = new DataTable({
+        mount: document.getElementById('pedidosTableMount'),
+        endpoint: '/api/pedidos',
+        tamanhoPagina: 10,
+        ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtros: [
+            { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nº ou cliente...' },
+            { chave: 'status', tipo: 'select', opcoes: [
+                { valor: '', rotulo: 'Todos os status' },
+                { valor: 'pendente', rotulo: 'Pendente' },
+                { valor: 'processando', rotulo: 'Processando' },
+                { valor: 'enviado', rotulo: 'Enviado' },
+                { valor: 'entregue', rotulo: 'Entregue' },
+                { valor: 'cancelado', rotulo: 'Cancelado' }
+            ]}
+        ],
+        colunas: [
+            { chave: 'numero', rotulo: 'Nº', ordenavel: true,
+              formatar: (p) => p.numero || p.id },
+            { chave: 'orcamento_id', rotulo: 'Orçamento', ordenavel: true,
+              formatar: (p) => p.orcamento_id ? `#${p.orcamento_id}` : '-' },
+            { chave: 'cliente_nome', rotulo: 'Cliente', ordenavel: true,
+              formatar: (p) => p.cliente_nome || '-' },
+            { chave: 'data_pedido', rotulo: 'Data', ordenavel: true,
+              formatar: (p) => formatarData(p.data_pedido) },
+            { chave: 'valor_total', rotulo: 'Total', ordenavel: true,
+              formatar: (p) => formatarMoeda(p.valor_total || 0) },
+            { chave: 'status', rotulo: 'Status', ordenavel: true,
+              formatar: (p) => renderStatusSelectPed(p) }
+        ],
+        acoes: (p) => `
+            <div class="acoes-row">
+                <button class="btn btn-primary btn-small" onclick="abrirDetalhesPedido(${p.id})" title="Detalhes/Editar">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-secondary btn-small" style="color:#c62828;border-color:#c62828" onclick="cancelarPedido(${p.id})" title="Cancelar">
+                    <i class="fas fa-ban"></i>
+                </button>
+            </div>
+        `
+    });
+    tabelaPedidos.inicializar();
+
     const on = (id, ev, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(ev, fn); };
-    on('pedAtualizarBtn', 'click', carregarPedidos);
-    on('pedFiltrarBtn', 'click', carregarPedidos);
-    on('pedFiltroBusca', 'keypress', (e) => { if (e.key === 'Enter') carregarPedidos(); });
+    on('pedAtualizarBtn', 'click', () => tabelaPedidos.recarregar());
     on('pedModalClose', 'click', () => fecharModalPed('pedModalDetalhes'));
     on('pedModalCancelar', 'click', () => fecharModalPed('pedModalDetalhes'));
     on('pedModalSalvar', 'click', salvarAlteracoesPedido);
-}
-
-async function carregarPedidos() {
-    const tbody = document.getElementById('pedidosTbody');
-    if (!tbody) return;
-
-    const busca = (document.getElementById('pedFiltroBusca') || {}).value || '';
-    const status = (document.getElementById('pedFiltroStatus') || {}).value || '';
-    const qs = new URLSearchParams();
-    if (busca) qs.append('busca', busca);
-    if (status) qs.append('status', status);
-    qs.append('limite', '100');
-
-    try {
-        const res = await fetch(`/api/pedidos?${qs.toString()}`);
-        const data = await res.json();
-        if (!data.sucesso) throw new Error(data.mensagem);
-        tbody.innerHTML = '';
-        if (!data.dados || data.dados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">Nenhum pedido encontrado</td></tr>';
-            return;
-        }
-        data.dados.forEach(p => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${p.numero || p.id}</td>
-                <td>${p.orcamento_id ? `#${p.orcamento_id}` : '-'}</td>
-                <td>${p.cliente_nome || '-'}</td>
-                <td>${formatarData(p.data_pedido)}</td>
-                <td>${formatarMoeda(p.valor_total || 0)}</td>
-                <td>${renderStatusSelectPed(p)}</td>
-                <td>
-                    <div class="acoes-row">
-                        <button class="btn btn-primary btn-small" onclick="abrirDetalhesPedido(${p.id})" title="Detalhes/Editar">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="btn btn-secondary btn-small" style="color:#c62828;border-color:#c62828" onclick="cancelarPedido(${p.id})" title="Cancelar">
-                            <i class="fas fa-ban"></i>
-                        </button>
-                    </div>
-                </td>
-            `;
-            tbody.appendChild(row);
-        });
-    } catch (erro) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#c00;">Erro ao carregar pedidos</td></tr>';
-    }
 }
 
 function corStatusPed(status) {
@@ -147,8 +117,6 @@ function corStatusPed(status) {
     };
     return cores[status] || '#607d8b';
 }
-
-const STATUS_PEDIDO_OPCOES = ['pendente', 'processando', 'enviado', 'entregue', 'cancelado'];
 
 function renderStatusSelectPed(p) {
     const desabilitado = p.status === 'cancelado' || p.status === 'entregue';
@@ -311,7 +279,7 @@ async function salvarAlteracoesPedido() {
         if (!data.sucesso) throw new Error(data.mensagem);
         alert('Pedido atualizado');
         fecharModalPed('pedModalDetalhes');
-        carregarPedidos();
+        if (tabelaPedidos) tabelaPedidos.recarregar();
     } catch (e) {
         alert(e.message || 'Erro ao salvar pedido');
     }
@@ -329,7 +297,7 @@ export async function cancelarPedido(id) {
         const data = await res.json();
         if (!data.sucesso) throw new Error(data.mensagem);
         alert('Pedido cancelado');
-        carregarPedidos();
+        if (tabelaPedidos) tabelaPedidos.recarregar();
     } catch (e) {
         alert(e.message || 'Erro ao cancelar pedido');
     }
@@ -343,8 +311,6 @@ function adicionarEstilosPedidos() {
     style.id = 'pedidos-custom-style';
     style.textContent = `
         .card-header-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
-        .filters-row { display:flex; gap:.5rem; margin-bottom:1rem; flex-wrap:wrap; }
-        .filters-row input, .filters-row select { flex:1; min-width:150px; padding:.5rem; border:1px solid #ddd; border-radius:6px; }
         .section-title { color: var(--primary-blue); font-size:1rem; margin: 1rem 0 .5rem 0; padding-bottom:.3rem; border-bottom:2px solid var(--light-blue); }
         .acoes-row { display:flex; gap:.25rem; flex-wrap:wrap; }
         .totals-box { background:#f5f8fc; border-radius:8px; padding:.75rem 1.25rem; display:flex; flex-direction:column; gap:.4rem; align-items:flex-end; }

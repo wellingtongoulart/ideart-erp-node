@@ -5,6 +5,9 @@
 
 import { abrirEdicao } from '../edit-modal.js';
 import { BuscaAvancada } from '../busca-avancada.js';
+import { DataTable } from '../data-table.js';
+
+let tabelaClientes = null;
 
 export const clientesPage = {
     title: 'Clientes',
@@ -19,23 +22,7 @@ export const clientesPage = {
                     <i class="fas fa-search"></i> Buscar
                 </button>
             </div>
-            <div class="table-wrapper">
-                <table id="clientesTable">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Nome</th>
-                            <th>Email</th>
-                            <th>Telefone</th>
-                            <th>Cidade</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="clientesTbody">
-                        <!-- Carregado dinamicamente -->
-                    </tbody>
-                </table>
-            </div>
+            <div id="clientesTableMount"></div>
         </div>
 
         <!-- Modal de Novo Cliente -->
@@ -109,8 +96,34 @@ export function inicializarClientes() {
     const modalNovoCliente = document.getElementById('modalNovoCliente');
     const buscaBtns = document.querySelectorAll('button:has(i.fa-search)');
 
-    // Carregar lista de clientes
-    carregarClientes();
+    tabelaClientes = new DataTable({
+        mount: document.getElementById('clientesTableMount'),
+        endpoint: '/api/clientes',
+        tamanhoPagina: 10,
+        ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtros: [
+            { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome, email ou telefone...' }
+        ],
+        colunas: [
+            { chave: 'id', rotulo: 'ID', ordenavel: true, largura: '70px' },
+            { chave: 'nome', rotulo: 'Nome', ordenavel: true },
+            { chave: 'email', rotulo: 'Email', ordenavel: true,
+              formatar: (c) => c.email || '-' },
+            { chave: 'telefone', rotulo: 'Telefone', ordenavel: true,
+              formatar: (c) => c.telefone || '-' },
+            { chave: 'cidade', rotulo: 'Cidade', ordenavel: true,
+              formatar: (c) => c.cidade || '-' }
+        ],
+        acoes: (c) => `
+            <button class="btn btn-primary btn-small" onclick="editarCliente(${c.id})">
+                <i class="fas fa-edit"></i> Editar
+            </button>
+            <button class="btn btn-secondary btn-small" onclick="deletarCliente(${c.id})">
+                <i class="fas fa-trash"></i> Deletar
+            </button>
+        `
+    });
+    tabelaClientes.inicializar();
 
     // Abrir modal para novo cliente
     if (novoClienteBtn) {
@@ -146,44 +159,8 @@ export function inicializarClientes() {
     }
 }
 
-/**
- * Carrega a lista de clientes do servidor
- */
-function carregarClientes() {
-    fetch('/api/clientes')
-        .then(response => response.json())
-        .then(data => {
-            if (data.sucesso && data.dados) {
-                const tbody = document.getElementById('clientesTbody');
-                if (!tbody) return;
-
-                tbody.innerHTML = '';
-
-                data.dados.forEach(cliente => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${cliente.id}</td>
-                        <td>${cliente.nome}</td>
-                        <td>${cliente.email || '-'}</td>
-                        <td>${cliente.telefone || '-'}</td>
-                        <td>${cliente.cidade || '-'}</td>
-                        <td>
-                            <button class="btn btn-primary btn-small" onclick="editarCliente(${cliente.id})">
-                                <i class="fas fa-edit"></i> Editar
-                            </button>
-                            <button class="btn btn-secondary btn-small" onclick="deletarCliente(${cliente.id})">
-                                <i class="fas fa-trash"></i> Deletar
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            }
-        })
-        .catch(erro => {
-            console.error('Erro ao carregar clientes:', erro);
-            alert('Erro ao carregar clientes');
-        });
+function recarregarTabela() {
+    if (tabelaClientes) tabelaClientes.recarregar();
 }
 
 /**
@@ -239,7 +216,7 @@ function salvarNovoCliente() {
             if (data.sucesso) {
                 alert('Cliente salvo com sucesso!');
                 fecharModalCliente();
-                carregarClientes();
+                recarregarTabela();
             } else {
                 mostrarMensagemCliente(data.mensagem || 'Erro ao salvar cliente', 'error');
             }
@@ -269,7 +246,7 @@ export function deletarCliente(id) {
             .then(data => {
                 if (data.sucesso) {
                     alert('Cliente deletado com sucesso!');
-                    carregarClientes();
+                    recarregarTabela();
                 } else {
                     alert(data.mensagem || 'Erro ao deletar cliente');
                 }
@@ -303,14 +280,11 @@ function abrirBuscaClientes() {
             titulo: 'Buscar Clientes',
             campos: ['nome', 'email', 'telefone'],
             onResultado: (cliente) => {
-                // Scroll até a tabela
-                const table = document.getElementById('clientesTable');
-                if (table) {
-                    table.scrollIntoView({ behavior: 'smooth' });
-
-                    // Destaca a linha do cliente encontrado
+                const mount = document.getElementById('clientesTableMount');
+                if (mount) {
+                    mount.scrollIntoView({ behavior: 'smooth' });
                     setTimeout(() => {
-                        const linhas = document.querySelectorAll('#clientesTbody tr');
+                        const linhas = mount.querySelectorAll('tbody tr');
                         linhas.forEach(linha => {
                             const idCell = linha.querySelector('td:first-child');
                             if (idCell && idCell.textContent == cliente.id) {

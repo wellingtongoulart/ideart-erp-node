@@ -1,14 +1,28 @@
 // Controller de Produtos
 const pool = require('../config/database');
+const { montarOrderBy } = require('../utils/ordenacao');
+
+const COLUNAS_ORDENACAO_PRODUTOS = {
+    id: 'id',
+    nome: 'nome',
+    categoria: 'categoria',
+    fornecedor: 'fornecedor',
+    preco_venda: 'preco_venda',
+    preco_custo: 'preco_custo',
+    estoque: 'estoque',
+    sku: 'sku',
+    ativo: 'ativo',
+    criado_em: 'criado_em'
+};
 
 // GET - Listar todos os produtos com filtros e paginação
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, busca = '', categoria = '', ativo = '' } = req.query;
+        const { pagina = 1, limite = 10, busca = '', categoria = '', ativo = '', ordenarPor, ordem } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
-        
+
         let query = 'SELECT * FROM produtos WHERE 1=1';
         let params = [];
 
@@ -37,8 +51,13 @@ exports.listar = async (req, res) => {
         );
         const totalRegistros = countResult[0].total;
 
-        // Buscar dados com paginação
-        query += ' ORDER BY criado_em DESC LIMIT ? OFFSET ?';
+        // Buscar dados com paginação e ordenação
+        const orderBy = montarOrderBy({
+            ordenarPor, ordem,
+            colunasPermitidas: COLUNAS_ORDENACAO_PRODUTOS,
+            padrao: 'criado_em DESC'
+        });
+        query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
         params.push(parseInt(limite), offset);
 
         const [produtos] = await connection.query(query, params);

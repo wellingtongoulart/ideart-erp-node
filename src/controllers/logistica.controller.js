@@ -1,16 +1,34 @@
 // Controller de Logística
 const pool = require('../config/database');
+const { montarOrderBy } = require('../utils/ordenacao');
+
+const COLUNAS_ORDENACAO_LOGISTICA = {
+    id: 'l.id',
+    numero_rastreamento: 'l.numero_rastreamento',
+    transportadora: 'l.transportadora',
+    status: 'l.status',
+    data_envio: 'l.data_envio',
+    data_entrega_prevista: 'l.data_entrega_prevista',
+    data_entrega_real: 'l.data_entrega_real',
+    pedido_numero: 'p.numero',
+    criado_em: 'l.criado_em'
+};
 
 // GET - Listar todos os registros de logística
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, status = '', pedido_id = '' } = req.query;
+        const { pagina = 1, limite = 10, busca = '', status = '', pedido_id = '', ordenarPor, ordem } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
-        
+
         let query = 'SELECT l.*, p.numero as pedido_numero FROM logistica l LEFT JOIN pedidos p ON l.pedido_id = p.id WHERE 1=1';
         let params = [];
+
+        if (busca) {
+            query += ' AND (l.numero_rastreamento LIKE ? OR l.transportadora LIKE ?)';
+            params.push(`%${busca}%`, `%${busca}%`);
+        }
 
         if (status) {
             query += ' AND l.status = ?';
@@ -28,7 +46,12 @@ exports.listar = async (req, res) => {
         );
         const totalRegistros = countResult[0].total;
 
-        query += ' ORDER BY l.criado_em DESC LIMIT ? OFFSET ?';
+        const orderBy = montarOrderBy({
+            ordenarPor, ordem,
+            colunasPermitidas: COLUNAS_ORDENACAO_LOGISTICA,
+            padrao: 'l.criado_em DESC'
+        });
+        query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
         params.push(parseInt(limite), offset);
 
         const [logistica] = await connection.query(query, params);
