@@ -213,7 +213,7 @@ function abrirModalNovoDocumento() {
     }
 
     if (modal) {
-        modal.style.display = 'block';
+        modal.classList.add('show');
     }
 }
 
@@ -223,7 +223,7 @@ function abrirModalNovoDocumento() {
 function fecharModalDocumento() {
     const modal = document.getElementById('modalNovoDocumento');
     if (modal) {
-        modal.style.display = 'none';
+        modal.classList.remove('show');
     }
 }
 

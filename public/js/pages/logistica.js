@@ -217,7 +217,7 @@ function abrirModalNovoRastreamento() {
     }
 
     if (modal) {
-        modal.style.display = 'block';
+        modal.classList.add('show');
     }
 }
 
@@ -227,7 +227,7 @@ function abrirModalNovoRastreamento() {
 function fecharModalRastreamento() {
     const modal = document.getElementById('modalNovoRastreamento');
     if (modal) {
-        modal.style.display = 'none';
+        modal.classList.remove('show');
     }
 }
 

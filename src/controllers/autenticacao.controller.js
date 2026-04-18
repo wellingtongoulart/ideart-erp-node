@@ -159,10 +159,249 @@ async function obterUsuarioLogado(req, res) {
     }
 }
 
+// ===== SOLICITAR RECUPERAÇÃO DE SENHA =====
+// Recebe um identificador (username ou email), cria um token com validade
+// de 1 hora e devolve a URL de redefinição. Em produção, a URL deve ser
+// enviada por email; como o ERP ainda não possui serviço de email, ela é
+// retornada diretamente no payload quando o usuário existe.
+const TOKEN_VALIDADE_MINUTOS = 60;
+const SENHA_MIN_CARACTERES = 6;
+
+async function solicitarRecuperacaoSenha(req, res) {
+    try {
+        const { identificador = '' } = req.body;
+        const valor = String(identificador).trim();
+
+        if (!valor) {
+            return res.status(400).json({
+                sucesso: false,
+                mensagem: 'Informe seu usuário ou email'
+            });
+        }
+
+        const connection = await pool.getConnection();
+        try {
+            const [usuarios] = await connection.execute(
+                'SELECT id, nome, email, username FROM usuarios WHERE (username = ? OR email = ?) AND ativo = TRUE',
+                [valor, valor]
+            );
+
+            if (usuarios.length === 0) {
+                // Resposta genérica para evitar enumeração de usuários
+                return res.json({
+                    sucesso: true,
+                    mensagem: 'Se a conta existir, um link de redefinição foi gerado.'
+                });
+            }
+
+            const usuario = usuarios[0];
+            const token = crypto.randomBytes(32).toString('hex');
+            const expiracao = new Date(Date.now() + TOKEN_VALIDADE_MINUTOS * 60 * 1000);
+
+            // Invalidar tokens anteriores ainda válidos para esse usuário
+            await connection.execute(
+                'UPDATE tokens_recuperacao_senha SET usado = TRUE WHERE usuario_id = ? AND usado = FALSE',
+                [usuario.id]
+            );
+
+            await connection.execute(
+                'INSERT INTO tokens_recuperacao_senha (usuario_id, token, data_expiracao) VALUES (?, ?, ?)',
+                [usuario.id, token, expiracao]
+            );
+
+            const protocolo = req.protocol;
+            const host = req.get('host');
+            const resetUrl = `${protocolo}://${host}/reset-password.html?token=${token}`;
+
+            return res.json({
+                sucesso: true,
+                mensagem: 'Link de redefinição gerado com sucesso.',
+                // Campos abaixo existem apenas porque o ambiente não possui
+                // serviço de email. Substituir por envio real em produção.
+                resetUrl,
+                token,
+                expiraEm: expiracao,
+                usuario: { nome: usuario.nome, email: usuario.email }
+            });
+        } finally {
+            connection.release();
+        }
+    } catch (erro) {
+        console.error('Erro em solicitarRecuperacaoSenha:', erro);
+        return res.status(500).json({
+            sucesso: false,
+            mensagem: 'Erro ao processar solicitação'
+        });
+    }
+}
+
+// ===== VALIDAR TOKEN DE RECUPERAÇÃO =====
+async function validarTokenRecuperacao(req, res) {
+    try {
+        const { token = '' } = req.query;
+        if (!token) {
+            return res.status(400).json({ sucesso: false, mensagem: 'Token ausente' });
+        }
+
+        const connection = await pool.getConnection();
+        try {
+            const [tokens] = await connection.execute(
+                `SELECT t.id, t.usuario_id, t.usado, t.data_expiracao, u.nome, u.email
+                 FROM tokens_recuperacao_senha t
+                 JOIN usuarios u ON u.id = t.usuario_id
+                 WHERE t.token = ?`,
+                [token]
+            );
+
+            if (tokens.length === 0) {
+                return res.status(404).json({ sucesso: false, mensagem: 'Token inválido' });
+            }
+
+            const registro = tokens[0];
+            if (registro.usado) {
+                return res.status(400).json({ sucesso: false, mensagem: 'Token já utilizado' });
+            }
+            if (new Date(registro.data_expiracao) < new Date()) {
+                return res.status(400).json({ sucesso: false, mensagem: 'Token expirado' });
+            }
+
+            return res.json({
+                sucesso: true,
+                usuario: { nome: registro.nome, email: registro.email }
+            });
+        } finally {
+            connection.release();
+        }
+    } catch (erro) {
+        console.error('Erro em validarTokenRecuperacao:', erro);
+        return res.status(500).json({ sucesso: false, mensagem: 'Erro ao validar token' });
+    }
+}
+
+// ===== REDEFINIR SENHA COM TOKEN =====
+async function redefinirSenha(req, res) {
+    try {
+        const { token = '', novaSenha = '' } = req.body;
+
+        if (!token || !novaSenha) {
+            return res.status(400).json({
+                sucesso: false,
+                mensagem: 'Token e nova senha são obrigatórios'
+            });
+        }
+        if (String(novaSenha).length < SENHA_MIN_CARACTERES) {
+            return res.status(400).json({
+                sucesso: false,
+                mensagem: `A senha deve ter pelo menos ${SENHA_MIN_CARACTERES} caracteres`
+            });
+        }
+
+        const connection = await pool.getConnection();
+        try {
+            const [tokens] = await connection.execute(
+                'SELECT id, usuario_id, usado, data_expiracao FROM tokens_recuperacao_senha WHERE token = ?',
+                [token]
+            );
+
+            if (tokens.length === 0) {
+                return res.status(404).json({ sucesso: false, mensagem: 'Token inválido' });
+            }
+
+            const registro = tokens[0];
+            if (registro.usado) {
+                return res.status(400).json({ sucesso: false, mensagem: 'Token já utilizado' });
+            }
+            if (new Date(registro.data_expiracao) < new Date()) {
+                return res.status(400).json({ sucesso: false, mensagem: 'Token expirado' });
+            }
+
+            await connection.beginTransaction();
+            try {
+                await connection.execute(
+                    'UPDATE usuarios SET senha = ?, tentativas_falhas = 0, bloqueado_ate = NULL WHERE id = ?',
+                    [novaSenha, registro.usuario_id]
+                );
+                await connection.execute(
+                    'UPDATE tokens_recuperacao_senha SET usado = TRUE WHERE id = ?',
+                    [registro.id]
+                );
+                await connection.commit();
+            } catch (erroTx) {
+                await connection.rollback();
+                throw erroTx;
+            }
+
+            return res.json({ sucesso: true, mensagem: 'Senha redefinida com sucesso' });
+        } finally {
+            connection.release();
+        }
+    } catch (erro) {
+        console.error('Erro em redefinirSenha:', erro);
+        return res.status(500).json({ sucesso: false, mensagem: 'Erro ao redefinir senha' });
+    }
+}
+
+// ===== ALTERAR SENHA (USUÁRIO LOGADO) =====
+async function alterarSenha(req, res) {
+    try {
+        const { usuarioId, senhaAtual = '', novaSenha = '' } = req.body;
+
+        if (!usuarioId || !senhaAtual || !novaSenha) {
+            return res.status(400).json({
+                sucesso: false,
+                mensagem: 'Todos os campos são obrigatórios'
+            });
+        }
+        if (String(novaSenha).length < SENHA_MIN_CARACTERES) {
+            return res.status(400).json({
+                sucesso: false,
+                mensagem: `A nova senha deve ter pelo menos ${SENHA_MIN_CARACTERES} caracteres`
+            });
+        }
+        if (senhaAtual === novaSenha) {
+            return res.status(400).json({
+                sucesso: false,
+                mensagem: 'A nova senha deve ser diferente da atual'
+            });
+        }
+
+        const connection = await pool.getConnection();
+        try {
+            const [usuarios] = await connection.execute(
+                'SELECT id, senha FROM usuarios WHERE id = ? AND ativo = TRUE',
+                [usuarioId]
+            );
+
+            if (usuarios.length === 0) {
+                return res.status(404).json({ sucesso: false, mensagem: 'Usuário não encontrado' });
+            }
+            if (usuarios[0].senha !== senhaAtual) {
+                return res.status(401).json({ sucesso: false, mensagem: 'Senha atual incorreta' });
+            }
+
+            await connection.execute(
+                'UPDATE usuarios SET senha = ? WHERE id = ?',
+                [novaSenha, usuarioId]
+            );
+
+            return res.json({ sucesso: true, mensagem: 'Senha alterada com sucesso' });
+        } finally {
+            connection.release();
+        }
+    } catch (erro) {
+        console.error('Erro em alterarSenha:', erro);
+        return res.status(500).json({ sucesso: false, mensagem: 'Erro ao alterar senha' });
+    }
+}
+
 module.exports = {
     login,
     logout,
     listarUsuarios,
     obterUsuario,
-    obterUsuarioLogado
+    obterUsuarioLogado,
+    solicitarRecuperacaoSenha,
+    validarTokenRecuperacao,
+    redefinirSenha,
+    alterarSenha
 };

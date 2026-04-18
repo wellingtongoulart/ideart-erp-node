@@ -273,7 +273,11 @@ function setupUserMenu() {
             if (userDropdown) {
                 userDropdown.classList.remove('show');
             }
-            mostrarAviso('Funcionalidade de alterar senha em desenvolvimento!');
+            if (typeof abrirModalAlterarSenha === 'function') {
+                abrirModalAlterarSenha();
+            } else {
+                mostrarErro('Módulo de alteração de senha indisponível.');
+            }
         });
     }
     
