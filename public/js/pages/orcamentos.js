@@ -7,6 +7,7 @@ import { formatarMoeda, formatarData } from '../utils.js';
 import { DataTable } from '../data-table.js';
 
 let tabelaOrcamentos = null;
+let tabelaProdutosModal = null;
 
 export const orcamentosPage = {
     title: 'Orçamentos',
@@ -156,23 +157,13 @@ export const orcamentosPage = {
 
         <!-- MODAL: selecionar produto cadastrado -->
         <div class="modal" id="orcModalProduto">
-            <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-content" style="max-width: 900px;">
                 <div class="modal-header">
                     <h3>Selecionar Produto</h3>
                     <button class="modal-close" id="orcModalProdutoClose">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <div class="form-group">
-                        <input type="text" id="orcBuscaProduto" placeholder="Filtrar por nome ou SKU..." />
-                    </div>
-                    <div class="table-wrapper" style="max-height:400px; overflow-y:auto;">
-                        <table>
-                            <thead>
-                                <tr><th>SKU</th><th>Nome</th><th>Categoria</th><th>Preço</th><th></th></tr>
-                            </thead>
-                            <tbody id="orcListaProdutos"></tbody>
-                        </table>
-                    </div>
+                    <div id="orcProdutoTableMount"></div>
                 </div>
             </div>
         </div>
@@ -266,7 +257,8 @@ export function inicializarOrcamentos() {
     on('orcModalCustomClose', 'click', () => fecharModal('orcModalCustom'));
     on('orcModalBaseClose', 'click', () => fecharModal('orcModalBase'));
 
-    on('orcBuscaProduto', 'input', filtrarListaProdutos);
+    inicializarTabelaProdutosModal();
+
     on('orcBuscaBase', 'input', filtrarListaBase);
 
     on('orcCustomCancelar', 'click', () => fecharModal('orcModalCustom'));
@@ -592,35 +584,64 @@ export function removerItem(idx) {
 }
 
 // ====== Modal de produtos cadastrados ======
-function abrirModalProduto() {
-    filtrarListaProdutos();
-    abrirModal('orcModalProduto');
+function inicializarTabelaProdutosModal() {
+    const mount = document.getElementById('orcProdutoTableMount');
+    if (!mount) return;
+    tabelaProdutosModal = new DataTable({
+        mount,
+        endpoint: '/api/produtos',
+        tamanhoPagina: 8,
+        ordenacaoPadrao: { chave: 'nome', direcao: 'asc' },
+        // força somente produtos ativos neste modal
+        paramsExtras: () => ({ ativo: 'true' }),
+        filtros: [
+            { chave: 'busca', tipo: 'text', placeholder: 'Filtrar por nome ou SKU...' },
+            { chave: 'categoria', tipo: 'select',
+              placeholder: 'Todas as categorias',
+              opcoesEndpoint: '/api/produtos/categorias/lista' },
+            { chave: 'fornecedor', tipo: 'select',
+              placeholder: 'Todos os fornecedores',
+              opcoesEndpoint: '/api/produtos/fornecedores/lista' },
+            { tipo: 'number-range', rotulo: 'Preço',
+              chaveMin: 'preco_min', chaveMax: 'preco_max',
+              step: '0.01', placeholderMin: 'R$ mín', placeholderMax: 'R$ máx' },
+            { tipo: 'number-range', rotulo: 'Estoque',
+              chaveMin: 'estoque_min', chaveMax: 'estoque_max',
+              step: '1', placeholderMin: 'Mín', placeholderMax: 'Máx' }
+        ],
+        colunas: [
+            { chave: 'sku', rotulo: 'SKU', ordenavel: true,
+              formatar: (p) => p.sku || '-' },
+            { chave: 'nome', rotulo: 'Nome', ordenavel: true },
+            { chave: 'categoria', rotulo: 'Categoria', ordenavel: true,
+              formatar: (p) => p.categoria || '-' },
+            { chave: 'fornecedor', rotulo: 'Fornecedor', ordenavel: true,
+              formatar: (p) => p.fornecedor || '-' },
+            { chave: 'estoque', rotulo: 'Estoque', ordenavel: true },
+            { chave: 'preco_venda', rotulo: 'Preço', ordenavel: true,
+              formatar: (p) => formatarMoeda(p.preco_venda || 0) }
+        ],
+        acoes: (p) => `
+            <button class="btn btn-primary btn-small" onclick="selecionarProduto(${p.id})">Adicionar</button>
+        `
+    });
+    tabelaProdutosModal.inicializar();
 }
 
-function filtrarListaProdutos() {
-    const tbody = document.getElementById('orcListaProdutos');
-    if (!tbody) return;
-    const q = (document.getElementById('orcBuscaProduto').value || '').toLowerCase();
-    const filtrados = orcState.produtosCache.filter(p =>
-        (p.nome || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q)
-    );
-    if (filtrados.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">Nenhum produto encontrado</td></tr>';
-        return;
-    }
-    tbody.innerHTML = filtrados.map(p => `
-        <tr>
-            <td>${p.sku || '-'}</td>
-            <td>${p.nome}</td>
-            <td>${p.categoria || '-'}</td>
-            <td>${formatarMoeda(p.preco_venda)}</td>
-            <td><button class="btn btn-primary btn-small" onclick="selecionarProduto(${p.id})">Adicionar</button></td>
-        </tr>
-    `).join('');
+function abrirModalProduto() {
+    abrirModal('orcModalProduto');
+    if (tabelaProdutosModal) tabelaProdutosModal.recarregar();
 }
 
 export function selecionarProduto(id) {
-    const p = orcState.produtosCache.find(x => x.id === id);
+    // Preferência: produto carregado agora no modal; fallback: cache geral
+    let p = null;
+    if (tabelaProdutosModal) {
+        p = tabelaProdutosModal.obterLinhas().find(x => x.id === id);
+    }
+    if (!p) {
+        p = orcState.produtosCache.find(x => x.id === id);
+    }
     if (!p) return;
     orcState.itens.push({
         produto_id: p.id,
