@@ -5,6 +5,10 @@
 
 import { abrirEdicao } from '../edit-modal.js';
 import { BuscaAvancada } from '../busca-avancada.js';
+import { DataTable } from '../data-table.js';
+import { formatarMoeda } from '../utils.js';
+
+let tabelaProdutos = null;
 
 export const produtosPage = {
     title: 'Produtos',
@@ -19,24 +23,7 @@ export const produtosPage = {
                     <i class="fas fa-search"></i> Buscar
                 </button>
             </div>
-            <div class="table-wrapper">
-                <table id="produtosTable">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Nome</th>
-                            <th>Categoria</th>
-                            <th>Fornecedor</th>
-                            <th>Preço</th>
-                            <th>Estoque</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="produtosTbody">
-                        <!-- Carregado dinamicamente -->
-                    </tbody>
-                </table>
-            </div>
+            <div id="produtosTableMount"></div>
         </div>
 
         <!-- Modal de Novo Produto -->
@@ -120,8 +107,52 @@ export function inicializarProdutos() {
     const modalNovoProduto = document.getElementById('modalNovoProduto');
     const buscaBtns = document.querySelectorAll('button:has(i.fa-search)');
 
-    // Carregar lista de produtos
-    carregarProdutos();
+    // Inicializa tabela paginada/ordenável
+    tabelaProdutos = new DataTable({
+        mount: document.getElementById('produtosTableMount'),
+        endpoint: '/api/produtos',
+        tamanhoPagina: 10,
+        ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtros: [
+            { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome ou SKU...' },
+            { chave: 'categoria', tipo: 'select',
+              placeholder: 'Todas as categorias',
+              opcoesEndpoint: '/api/produtos/categorias/lista' },
+            { chave: 'fornecedor', tipo: 'select',
+              placeholder: 'Todos os fornecedores',
+              opcoesEndpoint: '/api/produtos/fornecedores/lista' },
+            { chave: 'ativo', tipo: 'select', opcoes: [
+                { valor: 'true', rotulo: 'Somente ativos' },
+                { valor: 'false', rotulo: 'Somente inativos' }
+            ], placeholder: 'Ativos e inativos' },
+            { tipo: 'number-range', rotulo: 'Preço',
+              chaveMin: 'preco_min', chaveMax: 'preco_max',
+              step: '0.01', placeholderMin: 'R$ mín', placeholderMax: 'R$ máx' },
+            { tipo: 'number-range', rotulo: 'Estoque',
+              chaveMin: 'estoque_min', chaveMax: 'estoque_max',
+              step: '1', placeholderMin: 'Mín', placeholderMax: 'Máx' }
+        ],
+        colunas: [
+            { chave: 'id', rotulo: 'ID', ordenavel: true, largura: '70px' },
+            { chave: 'nome', rotulo: 'Nome', ordenavel: true },
+            { chave: 'categoria', rotulo: 'Categoria', ordenavel: true,
+              formatar: (p) => p.categoria || '-' },
+            { chave: 'fornecedor', rotulo: 'Fornecedor', ordenavel: true,
+              formatar: (p) => p.fornecedor || '-' },
+            { chave: 'preco_venda', rotulo: 'Preço', ordenavel: true,
+              formatar: (p) => formatarMoeda(p.preco_venda || 0) },
+            { chave: 'estoque', rotulo: 'Estoque', ordenavel: true }
+        ],
+        acoes: (p) => `
+            <button class="btn btn-primary btn-small" onclick="editarProduto(${p.id})">
+                <i class="fas fa-edit"></i> Editar
+            </button>
+            <button class="btn btn-secondary btn-small" onclick="deletarProduto(${p.id})">
+                <i class="fas fa-trash"></i> Deletar
+            </button>
+        `
+    });
+    tabelaProdutos.inicializar();
 
     // Abrir modal
     if (novoProdutoBtn) {
@@ -157,45 +188,8 @@ export function inicializarProdutos() {
     }
 }
 
-/**
- * Carrega a lista de produtos do servidor
- */
-function carregarProdutos() {
-    fetch('/api/produtos')
-        .then(response => response.json())
-        .then(data => {
-            if (data.sucesso && data.dados) {
-                const tbody = document.getElementById('produtosTbody');
-                if (!tbody) return;
-
-                tbody.innerHTML = '';
-
-                data.dados.forEach(produto => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${produto.id}</td>
-                        <td>${produto.nome}</td>
-                        <td>${produto.categoria || '-'}</td>
-                        <td>${produto.fornecedor || '-'}</td>
-                        <td>R$ ${parseFloat(produto.preco_venda).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td>${produto.estoque}</td>
-                        <td>
-                            <button class="btn btn-primary btn-small" onclick="editarProduto(${produto.id})">
-                                <i class="fas fa-edit"></i> Editar
-                            </button>
-                            <button class="btn btn-secondary btn-small" onclick="deletarProduto(${produto.id})">
-                                <i class="fas fa-trash"></i> Deletar
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            }
-        })
-        .catch(erro => {
-            console.error('Erro ao carregar produtos:', erro);
-            alert('Erro ao carregar produtos');
-        });
+function recarregarTabela() {
+    if (tabelaProdutos) tabelaProdutos.recarregar();
 }
 
 /**
@@ -286,7 +280,7 @@ function salvarNovoProduto(e) {
 
                 setTimeout(() => {
                     fecharModalProduto();
-                    carregarProdutos();
+                    recarregarTabela();
                 }, 1500);
             } else {
                 mostrarMensagemProduto(data.mensagem || 'Erro ao salvar produto', 'erro');
@@ -321,7 +315,7 @@ export function deletarProduto(id) {
             .then(data => {
                 if (data.sucesso) {
                     alert('Produto deletado com sucesso!');
-                    carregarProdutos();
+                    recarregarTabela();
                 } else {
                     alert(data.mensagem || 'Erro ao deletar produto');
                 }
@@ -366,14 +360,11 @@ function abrirBuscaProdutos() {
             titulo: 'Buscar Produtos',
             campos: ['nome', 'categoria', 'sku'],
             onResultado: (produto) => {
-                // Scroll até a tabela
-                const table = document.getElementById('produtosTable');
-                if (table) {
-                    table.scrollIntoView({ behavior: 'smooth' });
-
-                    // Destaca a linha do produto encontrado
+                const mount = document.getElementById('produtosTableMount');
+                if (mount) {
+                    mount.scrollIntoView({ behavior: 'smooth' });
                     setTimeout(() => {
-                        const linhas = document.querySelectorAll('#produtosTbody tr');
+                        const linhas = mount.querySelectorAll('tbody tr');
                         linhas.forEach(linha => {
                             const idCell = linha.querySelector('td:first-child');
                             if (idCell && idCell.textContent == produto.id) {

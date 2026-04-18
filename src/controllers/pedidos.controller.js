@@ -1,14 +1,32 @@
 // Controller de Pedidos
 const pool = require('../config/database');
+const { montarOrderBy } = require('../utils/ordenacao');
+
+const COLUNAS_ORDENACAO_PEDIDOS = {
+    id: 'p.id',
+    numero: 'p.numero',
+    cliente_nome: 'c.nome',
+    data_pedido: 'p.data_pedido',
+    valor_total: 'p.valor_total',
+    status: 'p.status',
+    orcamento_id: 'p.orcamento_id',
+    criado_em: 'p.criado_em'
+};
 
 // GET - Listar todos os pedidos com filtros e paginação
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, busca = '', status = '', cliente_id = '' } = req.query;
+        const {
+            pagina = 1, limite = 10,
+            busca = '', status = '', cliente_id = '',
+            data_pedido_inicio = '', data_pedido_fim = '',
+            valor_min = '', valor_max = '',
+            ordenarPor, ordem
+        } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
-        
+
         let query = `
             SELECT p.*, c.nome as cliente_nome
             FROM pedidos p
@@ -35,6 +53,26 @@ exports.listar = async (req, res) => {
             params.push(cliente_id);
         }
 
+        // Faixa de datas do pedido
+        if (data_pedido_inicio) {
+            query += ' AND p.data_pedido >= ?';
+            params.push(data_pedido_inicio);
+        }
+        if (data_pedido_fim) {
+            query += ' AND p.data_pedido <= ?';
+            params.push(data_pedido_fim);
+        }
+
+        // Faixa de valor total
+        if (valor_min !== '' && !isNaN(Number(valor_min))) {
+            query += ' AND p.valor_total >= ?';
+            params.push(Number(valor_min));
+        }
+        if (valor_max !== '' && !isNaN(Number(valor_max))) {
+            query += ' AND p.valor_total <= ?';
+            params.push(Number(valor_max));
+        }
+
         // Contar total de registros para paginação
         const [countResult] = await connection.execute(
             query.replace('SELECT p.*, c.nome as cliente_nome', 'SELECT COUNT(*) as total'),
@@ -42,8 +80,13 @@ exports.listar = async (req, res) => {
         );
         const totalRegistros = countResult[0].total;
 
-        // Buscar dados com paginação
-        query += ' ORDER BY p.criado_em DESC LIMIT ? OFFSET ?';
+        // Buscar dados com paginação e ordenação
+        const orderBy = montarOrderBy({
+            ordenarPor, ordem,
+            colunasPermitidas: COLUNAS_ORDENACAO_PEDIDOS,
+            padrao: 'p.criado_em DESC'
+        });
+        query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
         params.push(parseInt(limite), offset);
 
         const [pedidos] = await connection.query(query, params);

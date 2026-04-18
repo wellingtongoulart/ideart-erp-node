@@ -43,6 +43,15 @@ router.get('/', profissionaisController.listar);
 
 /**
  * @openapi
+ * /api/profissionais/especialidades/lista:
+ *   get:
+ *     tags: [Profissionais]
+ *     summary: Lista especialidades únicas
+ */
+router.get('/especialidades/lista', profissionaisController.especialidades);
+
+/**
+ * @openapi
  * /api/profissionais/{id}:
  *   get:
  *     tags: [Profissionais]

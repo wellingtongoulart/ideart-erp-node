@@ -1,14 +1,25 @@
 // Controller de Clientes
 const pool = require('../config/database');
+const { montarOrderBy } = require('../utils/ordenacao');
+
+const COLUNAS_ORDENACAO_CLIENTES = {
+    id: 'id',
+    nome: 'nome',
+    email: 'email',
+    telefone: 'telefone',
+    cidade: 'cidade',
+    estado: 'estado',
+    criado_em: 'criado_em'
+};
 
 // GET - Listar todos os clientes
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, busca = '', cidade = '' } = req.query;
+        const { pagina = 1, limite = 10, busca = '', cidade = '', estado = '', ordenarPor, ordem } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
-        
+
         let query = 'SELECT * FROM clientes WHERE 1=1';
         let params = [];
 
@@ -18,8 +29,13 @@ exports.listar = async (req, res) => {
         }
 
         if (cidade) {
-            query += ' AND cidade = ?';
-            params.push(cidade);
+            query += ' AND cidade LIKE ?';
+            params.push(`%${cidade}%`);
+        }
+
+        if (estado) {
+            query += ' AND estado = ?';
+            params.push(estado);
         }
 
         const [countResult] = await connection.execute(
@@ -28,7 +44,12 @@ exports.listar = async (req, res) => {
         );
         const totalRegistros = countResult[0].total;
 
-        query += ' ORDER BY criado_em DESC LIMIT ? OFFSET ?';
+        const orderBy = montarOrderBy({
+            ordenarPor, ordem,
+            colunasPermitidas: COLUNAS_ORDENACAO_CLIENTES,
+            padrao: 'criado_em DESC'
+        });
+        query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
         params.push(parseInt(limite), offset);
 
         const [clientes] = await connection.query(query, params);
@@ -232,6 +253,31 @@ exports.deletar = async (req, res) => {
         res.status(500).json({
             sucesso: false,
             mensagem: 'Erro ao deletar cliente',
+            erro: erro.message
+        });
+    }
+};
+
+// GET - Listar estados únicos
+exports.estados = async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+
+        const [estados] = await connection.execute(
+            'SELECT DISTINCT estado FROM clientes WHERE estado IS NOT NULL AND estado != "" ORDER BY estado'
+        );
+
+        connection.release();
+
+        res.json({
+            sucesso: true,
+            mensagem: 'Estados listados com sucesso',
+            dados: estados.map(e => e.estado)
+        });
+    } catch (erro) {
+        res.status(500).json({
+            sucesso: false,
+            mensagem: 'Erro ao listar estados',
             erro: erro.message
         });
     }

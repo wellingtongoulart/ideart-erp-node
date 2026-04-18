@@ -3,6 +3,10 @@
  * Acompanhamento e gerenciamento de logística
  */
 
+import { DataTable } from '../data-table.js';
+
+let tabelaLogistica = null;
+
 const logisticaPage = {
     title: 'Logística',
     content: `
@@ -16,24 +20,7 @@ const logisticaPage = {
                     <i class="fas fa-search"></i> Buscar
                 </button>
             </div>
-            <div class="table-wrapper">
-                <table id="logisticaTable">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Rastreamento</th>
-                            <th>Transportadora</th>
-                            <th>Origem</th>
-                            <th>Destino</th>
-                            <th>Status</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="logisticaTbody">
-                        <!-- Carregado dinamicamente -->
-                    </tbody>
-                </table>
-            </div>
+            <div id="logisticaTableMount"></div>
         </div>
 
         <!-- Modal de Novo Rastreamento -->
@@ -118,20 +105,57 @@ function inicializarLogistica() {
     const modalNovoRastreamento = document.getElementById('modalNovoRastreamento');
     const buscaBtns = document.querySelectorAll('button:has(i.fa-search)');
 
-    // Carregar dados de logística
-    carregarLogistica();
+    tabelaLogistica = new DataTable({
+        mount: document.getElementById('logisticaTableMount'),
+        endpoint: '/api/logistica',
+        tamanhoPagina: 10,
+        ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtros: [
+            { chave: 'busca', tipo: 'text', placeholder: 'Buscar por rastreamento...' },
+            { chave: 'status', tipo: 'select',
+              placeholder: 'Todos os status',
+              opcoes: [
+                { valor: 'postado', rotulo: 'Postado' },
+                { valor: 'em_transito', rotulo: 'Em Trânsito' },
+                { valor: 'em_entrega', rotulo: 'Em Entrega' },
+                { valor: 'entregue', rotulo: 'Entregue' },
+                { valor: 'perdido', rotulo: 'Perdido' },
+                { valor: 'devolvido', rotulo: 'Devolvido' }
+            ]},
+            { chave: 'transportadora', tipo: 'select',
+              placeholder: 'Todas as transportadoras',
+              opcoesEndpoint: '/api/logistica/transportadoras/lista' },
+            { tipo: 'date-range', rotulo: 'Data envio',
+              chaveMin: 'data_envio_inicio', chaveMax: 'data_envio_fim' }
+        ],
+        colunas: [
+            { chave: 'id', rotulo: 'ID', ordenavel: true, largura: '70px' },
+            { chave: 'numero_rastreamento', rotulo: 'Rastreamento', ordenavel: true,
+              formatar: (l) => l.numero_rastreamento || '-' },
+            { chave: 'transportadora', rotulo: 'Transportadora', ordenavel: true,
+              formatar: (l) => l.transportadora || '-' },
+            { chave: 'pedido_numero', rotulo: 'Pedido', ordenavel: true,
+              formatar: (l) => l.pedido_numero || (l.pedido_id ? `#${l.pedido_id}` : '-') },
+            { chave: 'data_envio', rotulo: 'Envio', ordenavel: true,
+              formatar: (l) => l.data_envio ? new Date(l.data_envio).toLocaleDateString('pt-BR') : '-' },
+            { chave: 'status', rotulo: 'Status', ordenavel: true,
+              formatar: (l) => renderStatusLog(l.status) }
+        ],
+        acoes: (l) => `
+            <button class="btn btn-primary btn-small" onclick="editarLogistica(${l.id})">
+                <i class="fas fa-edit"></i> Editar
+            </button>
+            <button class="btn btn-secondary btn-small" onclick="deletarLogistica(${l.id})">
+                <i class="fas fa-trash"></i> Deletar
+            </button>
+        `
+    });
+    tabelaLogistica.inicializar();
 
-    // Abrir modal para novo rastreamento
     if (novoRastreamentoBtn) {
         novoRastreamentoBtn.addEventListener('click', abrirModalNovoRastreamento);
     }
 
-    // Buscar logística
-    buscaBtns.forEach(btn => {
-        btn.addEventListener('click', abrirBuscaLogistica);
-    });
-
-    // Fechar modal
     if (fecharModalBtn) {
         fecharModalBtn.addEventListener('click', fecharModalRastreamento);
     }
@@ -140,12 +164,10 @@ function inicializarLogistica() {
         cancelarRastreamentoBtn.addEventListener('click', fecharModalRastreamento);
     }
 
-    // Salvar rastreamento
     if (salvarRastreamentoBtn) {
         salvarRastreamentoBtn.addEventListener('click', salvarNovoRastreamento);
     }
 
-    // Fechar modal ao clicar fora
     if (modalNovoRastreamento) {
         window.addEventListener('click', (event) => {
             if (event.target === modalNovoRastreamento) {
@@ -155,54 +177,21 @@ function inicializarLogistica() {
     }
 }
 
-/**
- * Carrega dados de logística do servidor
- */
-function carregarLogistica() {
-    fetch('/api/logistica')
-        .then(response => response.json())
-        .then(data => {
-            if (data.sucesso && data.dados) {
-                const tbody = document.getElementById('logisticaTbody');
-                if (!tbody) return;
+function recarregarTabela() {
+    if (tabelaLogistica) tabelaLogistica.recarregar();
+}
 
-                tbody.innerHTML = '';
-
-                data.dados.forEach(logistica => {
-                    const statusClasses = {
-                        'postado': '#2196f3',
-                        'em_transito': '#ff9800',
-                        'em_entrega': '#4caf50',
-                        'entregue': '#4caf50',
-                        'perdido': '#f44336',
-                        'devolvido': '#9e9e9e'
-                    };
-
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${logistica.id}</td>
-                        <td>${logistica.numero_rastreamento || '-'}</td>
-                        <td>${logistica.transportadora || '-'}</td>
-                        <td>${logistica.origem || '-'}</td>
-                        <td>${logistica.destino || '-'}</td>
-                        <td><span style="background: ${statusClasses[logistica.status] || '#2196f3'}; color: white; padding: 0.3rem 0.6rem; border-radius: 4px;">${logistica.status || '-'}</span></td>
-                        <td>
-                            <button class="btn btn-primary btn-small" onclick="editarLogistica(${logistica.id})">
-                                <i class="fas fa-edit"></i> Editar
-                            </button>
-                            <button class="btn btn-secondary btn-small" onclick="deletarLogistica(${logistica.id})">
-                                <i class="fas fa-trash"></i> Deletar
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            }
-        })
-        .catch(erro => {
-            console.error('Erro ao carregar logística:', erro);
-            alert('Erro ao carregar logística');
-        });
+function renderStatusLog(status) {
+    const cores = {
+        'postado': '#2196f3',
+        'em_transito': '#ff9800',
+        'em_entrega': '#4caf50',
+        'entregue': '#4caf50',
+        'perdido': '#f44336',
+        'devolvido': '#9e9e9e'
+    };
+    const cor = cores[status] || '#2196f3';
+    return `<span style="background:${cor};color:#fff;padding:.3rem .6rem;border-radius:4px;">${status || '-'}</span>`;
 }
 
 /**
@@ -258,7 +247,7 @@ function salvarNovoRastreamento() {
             if (data.sucesso) {
                 alert('Rastreamento salvo com sucesso!');
                 fecharModalRastreamento();
-                carregarLogistica();
+                recarregarTabela();
             } else {
                 mostrarMensagemRastreamento(data.mensagem || 'Erro ao salvar rastreamento', 'error');
             }
@@ -288,7 +277,7 @@ function deletarLogistica(id) {
             .then(data => {
                 if (data.sucesso) {
                     alert('Rastreamento deletado com sucesso!');
-                    carregarLogistica();
+                    recarregarTabela();
                 } else {
                     alert(data.mensagem || 'Erro ao deletar rastreamento');
                 }
@@ -312,37 +301,5 @@ function mostrarMensagemRastreamento(mensagem, tipo) {
     messageEl.style.display = 'block';
 }
 
-/**
- * Abre o modal de busca de logística
- */
-function abrirBuscaLogistica() {
-    if (!window.buscaLogistica) {
-        window.buscaLogistica = new BuscaAvancada({
-            endpoint: '/api/logistica',
-            titulo: 'Buscar Rastreamentos',
-            campos: ['numero_rastreamento', 'transportadora', 'status'],
-            onResultado: (logistica) => {
-                // Scroll até a tabela
-                const table = document.getElementById('logisticaTable');
-                if (table) {
-                    table.scrollIntoView({ behavior: 'smooth' });
-
-                    // Destaca a linha do rastreamento encontrado
-                    setTimeout(() => {
-                        const linhas = document.querySelectorAll('#logisticaTbody tr');
-                        linhas.forEach(linha => {
-                            const idCell = linha.querySelector('td:first-child');
-                            if (idCell && idCell.textContent == logistica.id) {
-                                linha.style.background = '#fff9c4';
-                                setTimeout(() => {
-                                    linha.style.background = '';
-                                }, 3000);
-                            }
-                        });
-                    }, 500);
-                }
-            }
-        });
-    }
-    window.buscaLogistica.abrir();
-}
+window.editarLogistica = editarLogistica;
+window.deletarLogistica = deletarLogistica;

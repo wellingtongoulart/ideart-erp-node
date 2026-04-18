@@ -1,14 +1,34 @@
 // Controller de Produtos
 const pool = require('../config/database');
+const { montarOrderBy } = require('../utils/ordenacao');
+
+const COLUNAS_ORDENACAO_PRODUTOS = {
+    id: 'id',
+    nome: 'nome',
+    categoria: 'categoria',
+    fornecedor: 'fornecedor',
+    preco_venda: 'preco_venda',
+    preco_custo: 'preco_custo',
+    estoque: 'estoque',
+    sku: 'sku',
+    ativo: 'ativo',
+    criado_em: 'criado_em'
+};
 
 // GET - Listar todos os produtos com filtros e paginação
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, busca = '', categoria = '', ativo = '' } = req.query;
+        const {
+            pagina = 1, limite = 10,
+            busca = '', categoria = '', fornecedor = '', ativo = '',
+            preco_min = '', preco_max = '',
+            estoque_min = '', estoque_max = '',
+            ordenarPor, ordem
+        } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
-        
+
         let query = 'SELECT * FROM produtos WHERE 1=1';
         let params = [];
 
@@ -24,10 +44,36 @@ exports.listar = async (req, res) => {
             params.push(categoria);
         }
 
+        // Filtro por fornecedor
+        if (fornecedor) {
+            query += ' AND fornecedor = ?';
+            params.push(fornecedor);
+        }
+
         // Filtro por ativo/inativo
         if (ativo !== '') {
             query += ' AND ativo = ?';
             params.push(ativo === 'true' ? 1 : 0);
+        }
+
+        // Faixa de preço (preco_venda)
+        if (preco_min !== '' && !isNaN(Number(preco_min))) {
+            query += ' AND preco_venda >= ?';
+            params.push(Number(preco_min));
+        }
+        if (preco_max !== '' && !isNaN(Number(preco_max))) {
+            query += ' AND preco_venda <= ?';
+            params.push(Number(preco_max));
+        }
+
+        // Faixa de estoque
+        if (estoque_min !== '' && !isNaN(Number(estoque_min))) {
+            query += ' AND estoque >= ?';
+            params.push(Number(estoque_min));
+        }
+        if (estoque_max !== '' && !isNaN(Number(estoque_max))) {
+            query += ' AND estoque <= ?';
+            params.push(Number(estoque_max));
         }
 
         // Contar total de registros
@@ -37,8 +83,13 @@ exports.listar = async (req, res) => {
         );
         const totalRegistros = countResult[0].total;
 
-        // Buscar dados com paginação
-        query += ' ORDER BY criado_em DESC LIMIT ? OFFSET ?';
+        // Buscar dados com paginação e ordenação
+        const orderBy = montarOrderBy({
+            ordenarPor, ordem,
+            colunasPermitidas: COLUNAS_ORDENACAO_PRODUTOS,
+            padrao: 'criado_em DESC'
+        });
+        query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
         params.push(parseInt(limite), offset);
 
         const [produtos] = await connection.query(query, params);
@@ -319,6 +370,31 @@ exports.categorias = async (req, res) => {
         res.status(500).json({
             sucesso: false,
             mensagem: 'Erro ao listar categorias',
+            erro: erro.message
+        });
+    }
+};
+
+// GET - Listar fornecedores únicos
+exports.fornecedores = async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+
+        const [fornecedores] = await connection.execute(
+            'SELECT DISTINCT fornecedor FROM produtos WHERE fornecedor IS NOT NULL AND fornecedor != "" ORDER BY fornecedor'
+        );
+
+        connection.release();
+
+        res.json({
+            sucesso: true,
+            mensagem: 'Fornecedores listados com sucesso',
+            dados: fornecedores.map(f => f.fornecedor)
+        });
+    } catch (erro) {
+        res.status(500).json({
+            sucesso: false,
+            mensagem: 'Erro ao listar fornecedores',
             erro: erro.message
         });
     }

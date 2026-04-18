@@ -43,6 +43,15 @@ router.get('/', logisticaController.listar);
 
 /**
  * @openapi
+ * /api/logistica/transportadoras/lista:
+ *   get:
+ *     tags: [Logistica]
+ *     summary: Lista transportadoras únicas
+ */
+router.get('/transportadoras/lista', logisticaController.transportadoras);
+
+/**
+ * @openapi
  * /api/logistica/{id}:
  *   get:
  *     tags: [Logistica]

@@ -1,16 +1,37 @@
 // Controller de Documentos
 const pool = require('../config/database');
+const { montarOrderBy } = require('../utils/ordenacao');
+
+const COLUNAS_ORDENACAO_DOCUMENTOS = {
+    id: 'id',
+    nome: 'nome',
+    tipo: 'tipo',
+    referencia_tipo: 'referencia_tipo',
+    referencia_id: 'referencia_id',
+    data_criacao: 'data_criacao',
+    criado_em: 'criado_em'
+};
 
 // GET - Listar todos os documentos
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, tipo = '', referencia_tipo = '' } = req.query;
+        const {
+            pagina = 1, limite = 10,
+            busca = '', tipo = '', referencia_tipo = '',
+            data_inicio = '', data_fim = '',
+            ordenarPor, ordem
+        } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
-        
+
         let query = 'SELECT * FROM documentos WHERE 1=1';
         let params = [];
+
+        if (busca) {
+            query += ' AND nome LIKE ?';
+            params.push(`%${busca}%`);
+        }
 
         if (tipo) {
             query += ' AND tipo = ?';
@@ -22,13 +43,27 @@ exports.listar = async (req, res) => {
             params.push(referencia_tipo);
         }
 
+        if (data_inicio) {
+            query += ' AND data_criacao >= ?';
+            params.push(data_inicio);
+        }
+        if (data_fim) {
+            query += ' AND data_criacao <= ?';
+            params.push(data_fim);
+        }
+
         const [countResult] = await connection.execute(
             query.replace('SELECT *', 'SELECT COUNT(*) as total'),
             params
         );
         const totalRegistros = countResult[0].total;
 
-        query += ' ORDER BY criado_em DESC LIMIT ? OFFSET ?';
+        const orderBy = montarOrderBy({
+            ordenarPor, ordem,
+            colunasPermitidas: COLUNAS_ORDENACAO_DOCUMENTOS,
+            padrao: 'criado_em DESC'
+        });
+        query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
         params.push(parseInt(limite), offset);
 
         const [documentos] = await connection.query(query, params);

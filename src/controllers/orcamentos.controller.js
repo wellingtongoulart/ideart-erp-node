@@ -1,5 +1,17 @@
 // Controller de Orçamentos
 const pool = require('../config/database');
+const { montarOrderBy } = require('../utils/ordenacao');
+
+const COLUNAS_ORDENACAO_ORCAMENTOS = {
+    id: 'o.id',
+    numero: 'o.numero',
+    cliente_nome: 'c.nome',
+    data_criacao: 'o.data_criacao',
+    data_validade: 'o.data_validade',
+    valor_total: 'o.valor_total',
+    status: 'o.status',
+    criado_em: 'o.criado_em'
+};
 
 function gerarNumeroOrcamento() {
     return `ORC${Date.now()}`;
@@ -54,7 +66,14 @@ async function substituirItensOrcamento(connection, orcamentoId, itens) {
 // GET - Listar orçamentos com paginação e filtros
 exports.listar = async (req, res) => {
     try {
-        const { pagina = 1, limite = 10, status = '', cliente_id = '', busca = '' } = req.query;
+        const {
+            pagina = 1, limite = 10,
+            status = '', cliente_id = '', busca = '',
+            data_criacao_inicio = '', data_criacao_fim = '',
+            data_validade_inicio = '', data_validade_fim = '',
+            valor_min = '', valor_max = '',
+            ordenarPor, ordem
+        } = req.query;
         const offset = (pagina - 1) * limite;
 
         const connection = await pool.getConnection();
@@ -80,12 +99,47 @@ exports.listar = async (req, res) => {
             params.push(`%${busca}%`, `%${busca}%`);
         }
 
+        // Faixa de data de criação
+        if (data_criacao_inicio) {
+            query += ' AND o.data_criacao >= ?';
+            params.push(data_criacao_inicio);
+        }
+        if (data_criacao_fim) {
+            query += ' AND o.data_criacao <= ?';
+            params.push(data_criacao_fim);
+        }
+
+        // Faixa de validade
+        if (data_validade_inicio) {
+            query += ' AND o.data_validade >= ?';
+            params.push(data_validade_inicio);
+        }
+        if (data_validade_fim) {
+            query += ' AND o.data_validade <= ?';
+            params.push(data_validade_fim);
+        }
+
+        // Faixa de valor total
+        if (valor_min !== '' && !isNaN(Number(valor_min))) {
+            query += ' AND o.valor_total >= ?';
+            params.push(Number(valor_min));
+        }
+        if (valor_max !== '' && !isNaN(Number(valor_max))) {
+            query += ' AND o.valor_total <= ?';
+            params.push(Number(valor_max));
+        }
+
         const countQuery = query
             .replace(/SELECT o\.\*, c\.nome AS cliente_nome, c\.email AS cliente_email, c\.telefone AS cliente_telefone/, 'SELECT COUNT(*) AS total');
         const [countResult] = await connection.execute(countQuery, params);
         const totalRegistros = countResult[0].total;
 
-        query += ' ORDER BY o.criado_em DESC LIMIT ? OFFSET ?';
+        const orderBy = montarOrderBy({
+            ordenarPor, ordem,
+            colunasPermitidas: COLUNAS_ORDENACAO_ORCAMENTOS,
+            padrao: 'o.criado_em DESC'
+        });
+        query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
         params.push(parseInt(limite), offset);
 
         const [orcamentos] = await connection.query(query, params);

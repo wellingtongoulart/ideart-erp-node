@@ -4,6 +4,10 @@
  */
 
 import { formatarMoeda, formatarData } from '../utils.js';
+import { DataTable } from '../data-table.js';
+
+let tabelaOrcamentos = null;
+let tabelaProdutosModal = null;
 
 export const orcamentosPage = {
     title: 'Orçamentos',
@@ -19,35 +23,7 @@ export const orcamentosPage = {
                 </div>
             </div>
 
-            <div class="filters-row">
-                <input type="text" id="orcFiltroBusca" placeholder="Buscar por nº ou cliente..." />
-                <select id="orcFiltroStatus">
-                    <option value="">Todos os status</option>
-                    <option value="pendente">Pendente</option>
-                    <option value="aprovado">Aprovado</option>
-                    <option value="recusado">Recusado</option>
-                    <option value="expirado">Expirado</option>
-                    <option value="convertido">Convertido</option>
-                </select>
-                <button class="btn btn-secondary" id="orcFiltrarBtn"><i class="fas fa-search"></i> Filtrar</button>
-            </div>
-
-            <div class="table-wrapper">
-                <table id="orcamentosTable">
-                    <thead>
-                        <tr>
-                            <th>Nº</th>
-                            <th>Cliente</th>
-                            <th>Data</th>
-                            <th>Validade</th>
-                            <th>Valor</th>
-                            <th>Status</th>
-                            <th style="width: 260px;">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="orcamentosTbody"></tbody>
-                </table>
-            </div>
+            <div id="orcamentosTableMount"></div>
         </div>
 
         <!-- FORMULÁRIO (NOVO/EDITAR) -->
@@ -181,23 +157,13 @@ export const orcamentosPage = {
 
         <!-- MODAL: selecionar produto cadastrado -->
         <div class="modal" id="orcModalProduto">
-            <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-content" style="max-width: 900px;">
                 <div class="modal-header">
                     <h3>Selecionar Produto</h3>
                     <button class="modal-close" id="orcModalProdutoClose">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <div class="form-group">
-                        <input type="text" id="orcBuscaProduto" placeholder="Filtrar por nome ou SKU..." />
-                    </div>
-                    <div class="table-wrapper" style="max-height:400px; overflow-y:auto;">
-                        <table>
-                            <thead>
-                                <tr><th>SKU</th><th>Nome</th><th>Categoria</th><th>Preço</th><th></th></tr>
-                            </thead>
-                            <tbody id="orcListaProdutos"></tbody>
-                        </table>
-                    </div>
+                    <div id="orcProdutoTableMount"></div>
                 </div>
             </div>
         </div>
@@ -274,13 +240,11 @@ const orcState = {
 
 // ====== Inicialização ======
 export function inicializarOrcamentos() {
-    carregarOrcamentos();
     adicionarEstilosOrcamento();
+    inicializarTabelaOrcamentos();
 
     const on = (id, ev, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(ev, fn); };
     on('novoOrcamentoBtn', 'click', abrirFormularioNovo);
-    on('orcFiltrarBtn', 'click', carregarOrcamentos);
-    on('orcFiltroBusca', 'keypress', (e) => { if (e.key === 'Enter') carregarOrcamentos(); });
     on('orcVoltarBtn', 'click', voltarParaLista);
     on('orcSalvarBtn', 'click', salvarOrcamento);
 
@@ -293,7 +257,8 @@ export function inicializarOrcamentos() {
     on('orcModalCustomClose', 'click', () => fecharModal('orcModalCustom'));
     on('orcModalBaseClose', 'click', () => fecharModal('orcModalBase'));
 
-    on('orcBuscaProduto', 'input', filtrarListaProdutos);
+    inicializarTabelaProdutosModal();
+
     on('orcBuscaBase', 'input', filtrarListaBase);
 
     on('orcCustomCancelar', 'click', () => fecharModal('orcModalCustom'));
@@ -308,45 +273,53 @@ export function inicializarOrcamentos() {
 }
 
 // ====== Listagem ======
-async function carregarOrcamentos() {
-    const tbody = document.getElementById('orcamentosTbody');
-    if (!tbody) return;
+function inicializarTabelaOrcamentos() {
+    tabelaOrcamentos = new DataTable({
+        mount: document.getElementById('orcamentosTableMount'),
+        endpoint: '/api/orcamentos',
+        tamanhoPagina: 10,
+        ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtros: [
+            { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nº ou cliente...' },
+            { chave: 'status', tipo: 'select',
+              placeholder: 'Todos os status',
+              opcoes: [
+                { valor: 'pendente', rotulo: 'Pendente' },
+                { valor: 'aprovado', rotulo: 'Aprovado' },
+                { valor: 'recusado', rotulo: 'Recusado' },
+                { valor: 'expirado', rotulo: 'Expirado' },
+                { valor: 'convertido', rotulo: 'Convertido' }
+            ]},
+            { tipo: 'date-range', rotulo: 'Data criação',
+              chaveMin: 'data_criacao_inicio', chaveMax: 'data_criacao_fim' },
+            { tipo: 'date-range', rotulo: 'Validade',
+              chaveMin: 'data_validade_inicio', chaveMax: 'data_validade_fim' },
+            { tipo: 'number-range', rotulo: 'Valor',
+              chaveMin: 'valor_min', chaveMax: 'valor_max',
+              step: '0.01', placeholderMin: 'R$ mín', placeholderMax: 'R$ máx' }
+        ],
+        colunas: [
+            { chave: 'numero', rotulo: 'Nº', ordenavel: true,
+              formatar: (o) => o.numero || o.id },
+            { chave: 'cliente_nome', rotulo: 'Cliente', ordenavel: true,
+              formatar: (o) => o.cliente_nome || '-' },
+            { chave: 'data_criacao', rotulo: 'Data', ordenavel: true,
+              formatar: (o) => formatarData(o.data_criacao) },
+            { chave: 'data_validade', rotulo: 'Validade', ordenavel: true,
+              formatar: (o) => formatarData(o.data_validade) },
+            { chave: 'valor_total', rotulo: 'Valor', ordenavel: true,
+              formatar: (o) => formatarMoeda(o.valor_total || 0) },
+            { chave: 'status', rotulo: 'Status', ordenavel: true,
+              formatar: (o) => `<span class="status-badge" style="background:${corStatusOrc(o.status)};color:#fff;padding:.25rem .5rem;border-radius:4px;font-size:.85rem;">${o.status}</span>` }
+        ],
+        acoes: (o) => renderAcoesOrcamento(o),
+        larguraAcoes: '260px'
+    });
+    tabelaOrcamentos.inicializar();
+}
 
-    const busca = (document.getElementById('orcFiltroBusca') || {}).value || '';
-    const status = (document.getElementById('orcFiltroStatus') || {}).value || '';
-    const qs = new URLSearchParams();
-    if (busca) qs.append('busca', busca);
-    if (status) qs.append('status', status);
-    qs.append('limite', '100');
-
-    try {
-        const res = await fetch(`/api/orcamentos?${qs.toString()}`);
-        const data = await res.json();
-        if (!data.sucesso) throw new Error(data.mensagem || 'Erro');
-
-        tbody.innerHTML = '';
-        if (!data.dados || data.dados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">Nenhum orçamento encontrado</td></tr>';
-            return;
-        }
-
-        data.dados.forEach(o => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${o.numero || o.id}</td>
-                <td>${o.cliente_nome || '-'}</td>
-                <td>${formatarData(o.data_criacao)}</td>
-                <td>${formatarData(o.data_validade)}</td>
-                <td>${formatarMoeda(o.valor_total || 0)}</td>
-                <td><span class="status-badge" style="background:${corStatusOrc(o.status)};color:#fff;padding:.25rem .5rem;border-radius:4px;font-size:.85rem;">${o.status}</span></td>
-                <td>${renderAcoesOrcamento(o)}</td>
-            `;
-            tbody.appendChild(row);
-        });
-    } catch (erro) {
-        console.error(erro);
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#c00;">Erro ao carregar orçamentos</td></tr>';
-    }
+function recarregarOrcamentos() {
+    if (tabelaOrcamentos) tabelaOrcamentos.recarregar();
 }
 
 function renderAcoesOrcamento(o) {
@@ -479,7 +452,7 @@ async function voltarParaLista() {
         }
     }
     mostrarView(true);
-    await carregarOrcamentos();
+    recarregarOrcamentos();
 }
 
 function snapshotFormulario() {
@@ -611,35 +584,64 @@ export function removerItem(idx) {
 }
 
 // ====== Modal de produtos cadastrados ======
-function abrirModalProduto() {
-    filtrarListaProdutos();
-    abrirModal('orcModalProduto');
+function inicializarTabelaProdutosModal() {
+    const mount = document.getElementById('orcProdutoTableMount');
+    if (!mount) return;
+    tabelaProdutosModal = new DataTable({
+        mount,
+        endpoint: '/api/produtos',
+        tamanhoPagina: 8,
+        ordenacaoPadrao: { chave: 'nome', direcao: 'asc' },
+        // força somente produtos ativos neste modal
+        paramsExtras: () => ({ ativo: 'true' }),
+        filtros: [
+            { chave: 'busca', tipo: 'text', placeholder: 'Filtrar por nome ou SKU...' },
+            { chave: 'categoria', tipo: 'select',
+              placeholder: 'Todas as categorias',
+              opcoesEndpoint: '/api/produtos/categorias/lista' },
+            { chave: 'fornecedor', tipo: 'select',
+              placeholder: 'Todos os fornecedores',
+              opcoesEndpoint: '/api/produtos/fornecedores/lista' },
+            { tipo: 'number-range', rotulo: 'Preço',
+              chaveMin: 'preco_min', chaveMax: 'preco_max',
+              step: '0.01', placeholderMin: 'R$ mín', placeholderMax: 'R$ máx' },
+            { tipo: 'number-range', rotulo: 'Estoque',
+              chaveMin: 'estoque_min', chaveMax: 'estoque_max',
+              step: '1', placeholderMin: 'Mín', placeholderMax: 'Máx' }
+        ],
+        colunas: [
+            { chave: 'sku', rotulo: 'SKU', ordenavel: true,
+              formatar: (p) => p.sku || '-' },
+            { chave: 'nome', rotulo: 'Nome', ordenavel: true },
+            { chave: 'categoria', rotulo: 'Categoria', ordenavel: true,
+              formatar: (p) => p.categoria || '-' },
+            { chave: 'fornecedor', rotulo: 'Fornecedor', ordenavel: true,
+              formatar: (p) => p.fornecedor || '-' },
+            { chave: 'estoque', rotulo: 'Estoque', ordenavel: true },
+            { chave: 'preco_venda', rotulo: 'Preço', ordenavel: true,
+              formatar: (p) => formatarMoeda(p.preco_venda || 0) }
+        ],
+        acoes: (p) => `
+            <button class="btn btn-primary btn-small" onclick="selecionarProduto(${p.id})">Adicionar</button>
+        `
+    });
+    tabelaProdutosModal.inicializar();
 }
 
-function filtrarListaProdutos() {
-    const tbody = document.getElementById('orcListaProdutos');
-    if (!tbody) return;
-    const q = (document.getElementById('orcBuscaProduto').value || '').toLowerCase();
-    const filtrados = orcState.produtosCache.filter(p =>
-        (p.nome || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q)
-    );
-    if (filtrados.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">Nenhum produto encontrado</td></tr>';
-        return;
-    }
-    tbody.innerHTML = filtrados.map(p => `
-        <tr>
-            <td>${p.sku || '-'}</td>
-            <td>${p.nome}</td>
-            <td>${p.categoria || '-'}</td>
-            <td>${formatarMoeda(p.preco_venda)}</td>
-            <td><button class="btn btn-primary btn-small" onclick="selecionarProduto(${p.id})">Adicionar</button></td>
-        </tr>
-    `).join('');
+function abrirModalProduto() {
+    abrirModal('orcModalProduto');
+    if (tabelaProdutosModal) tabelaProdutosModal.recarregar();
 }
 
 export function selecionarProduto(id) {
-    const p = orcState.produtosCache.find(x => x.id === id);
+    // Preferência: produto carregado agora no modal; fallback: cache geral
+    let p = null;
+    if (tabelaProdutosModal) {
+        p = tabelaProdutosModal.obterLinhas().find(x => x.id === id);
+    }
+    if (!p) {
+        p = orcState.produtosCache.find(x => x.id === id);
+    }
     if (!p) return;
     orcState.itens.push({
         produto_id: p.id,
@@ -811,7 +813,7 @@ async function salvarOrcamento() {
         alert(data.mensagem || 'Orçamento salvo');
         orcState.originalSnapshot = snapshotFormulario();
         mostrarView(true);
-        await carregarOrcamentos();
+        recarregarOrcamentos();
     } catch (e) {
         alert(e.message || 'Erro ao salvar orçamento');
     }
@@ -825,7 +827,7 @@ export async function aprovarOrcamento(id) {
         const data = await res.json();
         if (!data.sucesso) throw new Error(data.mensagem);
         alert(`Pedido ${data.dados.pedido_numero} criado com sucesso!`);
-        carregarOrcamentos();
+        recarregarOrcamentos();
     } catch (e) {
         alert(e.message || 'Erro ao aprovar orçamento');
     }
@@ -843,7 +845,7 @@ export async function recusarOrcamento(id) {
         const data = await res.json();
         if (!data.sucesso) throw new Error(data.mensagem);
         alert('Orçamento recusado');
-        carregarOrcamentos();
+        recarregarOrcamentos();
     } catch (e) {
         alert(e.message || 'Erro ao recusar orçamento');
     }
@@ -855,7 +857,7 @@ export async function deletarOrcamento(id) {
         const res = await fetch(`/api/orcamentos/${id}`, { method: 'DELETE' });
         const data = await res.json();
         if (!data.sucesso) throw new Error(data.mensagem);
-        carregarOrcamentos();
+        recarregarOrcamentos();
     } catch (e) {
         alert(e.message || 'Erro ao deletar orçamento');
     }
@@ -1082,8 +1084,6 @@ function adicionarEstilosOrcamento() {
     style.id = 'orcamentos-custom-style';
     style.textContent = `
         .card-header-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
-        .filters-row { display:flex; gap:.5rem; margin-bottom:1rem; flex-wrap:wrap; }
-        .filters-row input, .filters-row select { flex:1; min-width:150px; padding:.5rem; border:1px solid #ddd; border-radius:6px; }
         .section-title { color: var(--primary-blue); font-size:1.1rem; margin: 1.25rem 0 .75rem 0; padding-bottom: .3rem; border-bottom:2px solid var(--light-blue); }
         .acoes-stack { display:flex; flex-direction:column; gap:.35rem; }
         .acoes-row { display:flex; gap:.25rem; flex-wrap:wrap; }

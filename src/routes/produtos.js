@@ -69,6 +69,18 @@ router.get('/categorias/lista', produtosController.categorias);
 
 /**
  * @openapi
+ * /api/produtos/fornecedores/lista:
+ *   get:
+ *     tags: [Produtos]
+ *     summary: Lista fornecedores únicos de produtos
+ *     responses:
+ *       200:
+ *         description: Fornecedores listados com sucesso
+ */
+router.get('/fornecedores/lista', produtosController.fornecedores);
+
+/**
+ * @openapi
  * /api/produtos/{id}:
  *   get:
  *     tags: [Produtos]

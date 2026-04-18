@@ -1,5 +1,8 @@
 const pool = require('../config/database');
 const crypto = require('crypto');
+const bcrypt = require('bcrypt');
+
+const BCRYPT_SALT_ROUNDS = 10;
 
 // ===== LOGIN =====
 async function login(req, res) {
@@ -32,8 +35,8 @@ async function login(req, res) {
 
         const usuario = usuarios[0];
 
-        // Comparação simples de senha
-        if (usuario.senha !== password) {
+        const senhaValida = await bcrypt.compare(password, usuario.senha);
+        if (!senhaValida) {
             return res.status(401).json({
                 sucesso: false,
                 mensagem: 'Usuário ou senha incorretos'
@@ -56,6 +59,7 @@ async function login(req, res) {
             }
         });
     } catch (erro) {
+        console.error('Erro em login:', erro);
         return res.status(500).json({
             sucesso: false,
             mensagem: 'Erro ao processar login'
@@ -315,11 +319,13 @@ async function redefinirSenha(req, res) {
                 return res.status(400).json({ sucesso: false, mensagem: 'Token expirado' });
             }
 
+            const novaSenhaHash = await bcrypt.hash(novaSenha, BCRYPT_SALT_ROUNDS);
+
             await connection.beginTransaction();
             try {
                 await connection.execute(
                     'UPDATE usuarios SET senha = ?, tentativas_falhas = 0, bloqueado_ate = NULL WHERE id = ?',
-                    [novaSenha, registro.usuario_id]
+                    [novaSenhaHash, registro.usuario_id]
                 );
                 await connection.execute(
                     'UPDATE tokens_recuperacao_senha SET usado = TRUE WHERE id = ?',
@@ -375,13 +381,16 @@ async function alterarSenha(req, res) {
             if (usuarios.length === 0) {
                 return res.status(404).json({ sucesso: false, mensagem: 'Usuário não encontrado' });
             }
-            if (usuarios[0].senha !== senhaAtual) {
+
+            const senhaAtualValida = await bcrypt.compare(senhaAtual, usuarios[0].senha);
+            if (!senhaAtualValida) {
                 return res.status(401).json({ sucesso: false, mensagem: 'Senha atual incorreta' });
             }
 
+            const novaSenhaHash = await bcrypt.hash(novaSenha, BCRYPT_SALT_ROUNDS);
             await connection.execute(
                 'UPDATE usuarios SET senha = ? WHERE id = ?',
-                [novaSenha, usuarioId]
+                [novaSenhaHash, usuarioId]
             );
 
             return res.json({ sucesso: true, mensagem: 'Senha alterada com sucesso' });
