@@ -60,7 +60,7 @@ class EditModal {
 
     const modal = document.createElement('div');
     modal.id = modalId;
-    modal.className = 'modal-overlay show';
+    modal.className = 'modal show';
     modal.innerHTML = `
             <div class="modal-content modal-large">
                 <div class="modal-header">
@@ -218,7 +218,19 @@ class EditModal {
     }
 
     const formData = new FormData(form);
-    const dados = Object.fromEntries(formData);
+    const dados = { id: formData.get('id') };
+
+    this.campos.forEach(campo => {
+      if (campo.type === 'checkbox') {
+        dados[campo.name] = form.elements[campo.name]?.checked ? 1 : 0;
+      } else if (campo.type === 'number') {
+        const val = formData.get(campo.name);
+        if (val !== null && val !== '') dados[campo.name] = Number(val);
+      } else {
+        const val = formData.get(campo.name);
+        if (val !== null) dados[campo.name] = val;
+      }
+    });
 
     try {
       const response = await fetch(`${this.endpoint}/${dados.id}`, {

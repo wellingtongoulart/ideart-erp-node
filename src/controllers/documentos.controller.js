@@ -31,7 +31,7 @@ exports.listar = async (req, res) => {
         query += ' ORDER BY criado_em DESC LIMIT ? OFFSET ?';
         params.push(parseInt(limite), offset);
 
-        const [documentos] = await connection.execute(query, params);
+        const [documentos] = await connection.query(query, params);
         connection.release();
 
         res.json({
@@ -145,11 +145,18 @@ exports.atualizar = async (req, res) => {
             });
         }
 
-        await connection.execute(
-            `UPDATE documentos SET nome = ?, tipo = ?, referencia_id = ?, referencia_tipo = ?, caminho_arquivo = ?, data_criacao = ?, atualizado_em = NOW()
-            WHERE id = ?`,
-            [nome || null, tipo || null, referencia_id || null, referencia_tipo || null, caminho_arquivo || null, data_criacao || null, id]
-        );
+        let query = 'UPDATE documentos SET atualizado_em = NOW()';
+        const params = [];
+        if (nome !== undefined)            { query += ', nome = ?';            params.push(nome); }
+        if (tipo !== undefined)            { query += ', tipo = ?';            params.push(tipo); }
+        if (referencia_id !== undefined)   { query += ', referencia_id = ?';   params.push(referencia_id); }
+        if (referencia_tipo !== undefined) { query += ', referencia_tipo = ?'; params.push(referencia_tipo); }
+        if (caminho_arquivo !== undefined) { query += ', caminho_arquivo = ?'; params.push(caminho_arquivo); }
+        if (data_criacao !== undefined)    { query += ', data_criacao = ?';    params.push(data_criacao); }
+        query += ' WHERE id = ?';
+        params.push(id);
+
+        await connection.execute(query, params);
 
         connection.release();
 

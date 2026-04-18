@@ -23,7 +23,7 @@ exports.listar = async (req, res) => {
         query += ' LIMIT ? OFFSET ?';
         params.push(parseInt(limite), offset);
 
-        const [dados] = await connection.execute(query, params);
+        const [dados] = await connection.query(query, params);
         
         connection.release();
 
