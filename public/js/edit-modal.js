@@ -343,21 +343,23 @@ const editModals = {
     { name: 'status', label: 'Status', type: 'select', options: ['Pendente', 'Confirmado', 'Enviado', 'Entregue'] }
   ]),
 
-  documento: new EditModal('Documento', '/api/documentos', [
-    { name: 'titulo', label: 'Título', required: true },
-    { name: 'tipo', label: 'Tipo' },
-    { name: 'conteudo', label: 'Conteúdo', type: 'textarea' },
-    { name: 'versao', label: 'Versão', type: 'number' }
-  ]),
+  // TODO: Documentos desabilitado — reativar quando solicitado.
+  // documento: new EditModal('Documento', '/api/documentos', [
+  //   { name: 'titulo', label: 'Título', required: true },
+  //   { name: 'tipo', label: 'Tipo' },
+  //   { name: 'conteudo', label: 'Conteúdo', type: 'textarea' },
+  //   { name: 'versao', label: 'Versão', type: 'number' }
+  // ]),
 
-  logistica: new EditModal('Logística', '/api/logistica', [
-    { name: 'pedido_id', label: 'Pedido' },
-    { name: 'codigo_rastreamento', label: 'Código de Rastreamento', required: true },
-    { name: 'transportadora', label: 'Transportadora' },
-    { name: 'data_envio', label: 'Data de Envio', type: 'date' },
-    { name: 'data_entrega', label: 'Data de Entrega', type: 'date' },
-    { name: 'status', label: 'Status', type: 'select', options: ['Pendente', 'Enviado', 'Em Trânsito', 'Entregue'] }
-  ])
+  // TODO: Logística desabilitada — reativar quando solicitado.
+  // logistica: new EditModal('Logística', '/api/logistica', [
+  //   { name: 'pedido_id', label: 'Pedido' },
+  //   { name: 'codigo_rastreamento', label: 'Código de Rastreamento', required: true },
+  //   { name: 'transportadora', label: 'Transportadora' },
+  //   { name: 'data_envio', label: 'Data de Envio', type: 'date' },
+  //   { name: 'data_entrega', label: 'Data de Entrega', type: 'date' },
+  //   { name: 'status', label: 'Status', type: 'select', options: ['Pendente', 'Enviado', 'Em Trânsito', 'Entregue'] }
+  // ])
 };
 
 // Função global para abrir edição

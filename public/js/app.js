@@ -63,20 +63,22 @@ const pageConfig = {
             inicializarProfissionais();
         }
     },
-    logistica: {
-        init: () => {
-            document.getElementById('pageTitle').textContent = logisticaPage.title;
-            document.getElementById('contentArea').innerHTML = logisticaPage.content;
-            inicializarLogistica();
-        }
-    },
-    documentos: {
-        init: () => {
-            document.getElementById('pageTitle').textContent = documentosPage.title;
-            document.getElementById('contentArea').innerHTML = documentosPage.content;
-            inicializarDocumentos();
-        }
-    },
+    // TODO: Logística desabilitada — reativar quando solicitado.
+    // logistica: {
+    //     init: () => {
+    //         document.getElementById('pageTitle').textContent = logisticaPage.title;
+    //         document.getElementById('contentArea').innerHTML = logisticaPage.content;
+    //         inicializarLogistica();
+    //     }
+    // },
+    // TODO: Documentos desabilitado — reativar quando solicitado.
+    // documentos: {
+    //     init: () => {
+    //         document.getElementById('pageTitle').textContent = documentosPage.title;
+    //         document.getElementById('contentArea').innerHTML = documentosPage.content;
+    //         inicializarDocumentos();
+    //     }
+    // },
     relatorios: {
         init: () => {
             document.getElementById('pageTitle').textContent = relatoriosPage.title;
@@ -86,16 +88,44 @@ const pageConfig = {
     }
 };
 
+const DEFAULT_PAGE = 'dashboard';
+
 /**
- * Carrega uma página e inicializa seus componentes
+ * Lê o nome da página a partir do hash atual da URL.
+ * Aceita os formatos "#pagina" e "#/pagina".
+ * @returns {string} Nome da página ou DEFAULT_PAGE se hash inválido.
+ */
+function getPageFromHash() {
+    const raw = (window.location.hash || '').replace(/^#\/?/, '').trim();
+    if (!raw) return DEFAULT_PAGE;
+    return pageConfig[raw] ? raw : DEFAULT_PAGE;
+}
+
+/**
+ * Navega para uma página atualizando o hash da URL.
+ * A renderização real é disparada pelo evento hashchange.
  * @param {string} pageName - Nome da página (chave em pageConfig)
  */
-function loadPage(pageName) {
+function navigateTo(pageName) {
+    const target = pageConfig[pageName] ? pageName : DEFAULT_PAGE;
+    const nextHash = `#/${target}`;
+    if (window.location.hash === nextHash) {
+        renderPage(target);
+    } else {
+        window.location.hash = nextHash;
+    }
+}
+
+/**
+ * Renderiza a página indicada (atualiza menu ativo, título e conteúdo).
+ * @param {string} pageName - Nome da página (chave em pageConfig)
+ */
+function renderPage(pageName) {
     const pageConfig_item = pageConfig[pageName];
-    
+
     if (!pageConfig_item) {
-        console.warn(`Página '${pageName}' não encontrada. Carregando dashboard.`);
-        loadPage('dashboard');
+        console.warn(`Página '${pageName}' não encontrada. Carregando ${DEFAULT_PAGE}.`);
+        navigateTo(DEFAULT_PAGE);
         return;
     }
 
@@ -123,6 +153,11 @@ function loadPage(pageName) {
     }
 }
 
+// Mantém compatibilidade com chamadas existentes a loadPage(name)
+function loadPage(pageName) {
+    navigateTo(pageName);
+}
+
 /**
  * Inicializa o aplicativo
  * Chamado quando DOMContentLoaded é disparado
@@ -134,9 +169,21 @@ function initializeApp() {
         
         // Inicializar perfil do usuário
         initializeUserProfile();
-        
-        // Carregar página inicial
-        loadPage('dashboard');
+
+        // Garantir que a URL tenha um hash válido na primeira carga
+        const initialPage = getPageFromHash();
+        if (!window.location.hash) {
+            // replaceState evita criar uma entrada extra no histórico
+            history.replaceState(null, '', `#/${initialPage}`);
+        }
+
+        // Renderizar página conforme o hash atual (ou padrão)
+        renderPage(initialPage);
+
+        // Reagir a mudanças de hash (back/forward do navegador, link direto, etc.)
+        window.addEventListener('hashchange', () => {
+            renderPage(getPageFromHash());
+        });
 
         // Setup navigation
         setupNavigation();
@@ -160,7 +207,7 @@ function setupNavigation() {
         item.addEventListener('click', (e) => {
             e.preventDefault();
             const pageName = item.getAttribute('data-page');
-            loadPage(pageName);
+            navigateTo(pageName);
         });
     });
 }
