@@ -31,7 +31,7 @@ exports.listar = async (req, res) => {
         query += ' ORDER BY o.criado_em DESC LIMIT ? OFFSET ?';
         params.push(parseInt(limite), offset);
 
-        const [orcamentos] = await connection.execute(query, params);
+        const [orcamentos] = await connection.query(query, params);
         connection.release();
 
         res.json({
@@ -158,11 +158,20 @@ exports.atualizar = async (req, res) => {
             });
         }
 
-        await connection.execute(
-            `UPDATE orcamentos SET numero = ?, cliente_id = ?, data_criacao = ?, data_validade = ?, valor_total = ?, desconto = ?, status = ?, observacoes = ?, atualizado_em = NOW()
-            WHERE id = ?`,
-            [numero || null, cliente_id || null, data_criacao || null, data_validade || null, valor_total || 0, desconto || 0, status || 'pendente', observacoes || null, id]
-        );
+        let query = 'UPDATE orcamentos SET atualizado_em = NOW()';
+        const params = [];
+        if (numero !== undefined)        { query += ', numero = ?';         params.push(numero); }
+        if (cliente_id !== undefined)    { query += ', cliente_id = ?';     params.push(cliente_id); }
+        if (data_criacao !== undefined)  { query += ', data_criacao = ?';   params.push(data_criacao); }
+        if (data_validade !== undefined) { query += ', data_validade = ?';  params.push(data_validade); }
+        if (valor_total !== undefined)   { query += ', valor_total = ?';    params.push(valor_total); }
+        if (desconto !== undefined)      { query += ', desconto = ?';       params.push(desconto); }
+        if (status !== undefined)        { query += ', status = ?';         params.push(status); }
+        if (observacoes !== undefined)   { query += ', observacoes = ?';    params.push(observacoes); }
+        query += ' WHERE id = ?';
+        params.push(id);
+
+        await connection.execute(query, params);
 
         connection.release();
 

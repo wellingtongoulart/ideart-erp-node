@@ -31,7 +31,7 @@ exports.listar = async (req, res) => {
         query += ' ORDER BY l.criado_em DESC LIMIT ? OFFSET ?';
         params.push(parseInt(limite), offset);
 
-        const [logistica] = await connection.execute(query, params);
+        const [logistica] = await connection.query(query, params);
         connection.release();
 
         res.json({
@@ -158,11 +158,22 @@ exports.atualizar = async (req, res) => {
             });
         }
 
-        await connection.execute(
-            `UPDATE logistica SET numero_rastreamento = ?, pedido_id = ?, transportadora = ?, endereco_origem = ?, endereco_destino = ?, data_envio = ?, data_entrega_prevista = ?, data_entrega_real = ?, status = ?, observacoes = ?, atualizado_em = NOW()
-            WHERE id = ?`,
-            [numero_rastreamento || null, pedido_id || null, transportadora || null, endereco_origem || null, endereco_destino || null, data_envio || null, data_entrega_prevista || null, data_entrega_real || null, status || 'aguardando', observacoes || null, id]
-        );
+        let query = 'UPDATE logistica SET atualizado_em = NOW()';
+        const params = [];
+        if (numero_rastreamento !== undefined)   { query += ', numero_rastreamento = ?';   params.push(numero_rastreamento); }
+        if (pedido_id !== undefined)             { query += ', pedido_id = ?';             params.push(pedido_id); }
+        if (transportadora !== undefined)        { query += ', transportadora = ?';        params.push(transportadora); }
+        if (endereco_origem !== undefined)       { query += ', endereco_origem = ?';       params.push(endereco_origem); }
+        if (endereco_destino !== undefined)      { query += ', endereco_destino = ?';      params.push(endereco_destino); }
+        if (data_envio !== undefined)            { query += ', data_envio = ?';            params.push(data_envio); }
+        if (data_entrega_prevista !== undefined) { query += ', data_entrega_prevista = ?'; params.push(data_entrega_prevista); }
+        if (data_entrega_real !== undefined)     { query += ', data_entrega_real = ?';     params.push(data_entrega_real); }
+        if (status !== undefined)                { query += ', status = ?';                params.push(status); }
+        if (observacoes !== undefined)           { query += ', observacoes = ?';           params.push(observacoes); }
+        query += ' WHERE id = ?';
+        params.push(id);
+
+        await connection.execute(query, params);
 
         connection.release();
 

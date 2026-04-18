@@ -46,7 +46,7 @@ exports.listar = async (req, res) => {
         query += ' ORDER BY p.criado_em DESC LIMIT ? OFFSET ?';
         params.push(parseInt(limite), offset);
 
-        const [pedidos] = await connection.execute(query, params);
+        const [pedidos] = await connection.query(query, params);
         
         connection.release();
 

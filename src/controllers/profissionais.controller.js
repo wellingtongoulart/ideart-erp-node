@@ -31,7 +31,7 @@ exports.listar = async (req, res) => {
         query += ' ORDER BY criado_em DESC LIMIT ? OFFSET ?';
         params.push(parseInt(limite), offset);
 
-        const [profissionais] = await connection.execute(query, params);
+        const [profissionais] = await connection.query(query, params);
         connection.release();
 
         res.json({
@@ -190,11 +190,19 @@ exports.atualizar = async (req, res) => {
             }
         }
 
-        await connection.execute(
-            `UPDATE profissionais SET nome = ?, especialidade = ?, email = ?, telefone = ?, cpf = ?, data_admissao = ?, salario = ?, atualizado_em = NOW()
-            WHERE id = ?`,
-            [nome || null, especialidade || null, email || null, telefone || null, cpf || null, data_admissao || null, salario || 0, id]
-        );
+        let query = 'UPDATE profissionais SET atualizado_em = NOW()';
+        const params = [];
+        if (nome !== undefined)          { query += ', nome = ?';          params.push(nome); }
+        if (especialidade !== undefined) { query += ', especialidade = ?'; params.push(especialidade); }
+        if (email !== undefined)         { query += ', email = ?';         params.push(email); }
+        if (telefone !== undefined)      { query += ', telefone = ?';      params.push(telefone); }
+        if (cpf !== undefined)           { query += ', cpf = ?';           params.push(cpf); }
+        if (data_admissao !== undefined) { query += ', data_admissao = ?'; params.push(data_admissao); }
+        if (salario !== undefined)       { query += ', salario = ?';       params.push(salario); }
+        query += ' WHERE id = ?';
+        params.push(id);
+
+        await connection.execute(query, params);
 
         connection.release();
 
