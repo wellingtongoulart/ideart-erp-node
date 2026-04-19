@@ -101,8 +101,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const senha = novaSenha.value;
         const confirmacao = confirmarSenha.value;
 
-        if (senha.length < 6) {
-            novaSenhaError.textContent = 'A senha deve ter pelo menos 6 caracteres';
+        if (senha.length < 10) {
+            novaSenhaError.textContent = 'A senha deve ter pelo menos 10 caracteres';
             return;
         }
         if (senha !== confirmacao) {

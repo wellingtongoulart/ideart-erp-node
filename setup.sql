@@ -442,9 +442,11 @@ SELECT 'Ideart', 'Ideart Comércio Ltda.', 'contato@ideart.com.br', '(11) 0000-0
        'Endereço da empresa', 'São Paulo', 'SP'
 WHERE NOT EXISTS (SELECT 1 FROM empresa_config);
 
--- 5.2 usuários iniciais (senhas com bcrypt — idempotente por username UNIQUE)
--- Senhas iniciais: consulte a equipe ou redefina via fluxo de recuperação.
+-- 5.2 Usuário administrador inicial
+-- Senha inicial: "IdeartAdmin@2026" (bcrypt abaixo). O administrador DEVE trocar
+-- a senha no primeiro acesso através do menu "Alterar Senha".
+-- Cadastre os demais usuários pela aplicação depois de logar como admin.
 INSERT IGNORE INTO usuarios (nome, email, username, senha, funcao, ativo) VALUES
-('Administrador',    'admin@ideart.com',    'admin',    '$2b$10$Q4s5ZeLZFlzzYoxgno.rZOiCK4mLXvNgs4kkhsvIxKbU8sNPsrvHC', 'administrador', TRUE),
-('Vendedor Padrão',  'vendedor@ideart.com', 'vendedor', '$2b$10$QqsoJ5dmGrfI8skpsrfXvuqtzNrLwyiXjf3k1NjFw0RK7GmS8Vv8O', 'vendedor',      TRUE),
-('Gerente Sistema',  'gerente@ideart.com',  'gerente',  '$2b$10$4LUdXjwdZLHTjd/o4khbI.j5DR.bpTkQLbEHPC3GIYCxCkNJGQ7/W', 'gerente',       TRUE);
+('Administrador', 'admin@ideart.com', 'admin',
+ '$2b$10$fpGthemVLIQgvIYc9mRGMu76krFxvi/5x5E9ZDu/WwacEZP4PZiia',
+ 'administrador', TRUE);
