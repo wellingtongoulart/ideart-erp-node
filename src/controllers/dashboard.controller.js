@@ -67,15 +67,15 @@ exports.resumo = async (req, res) => {
 
         // ===== Gráficos =====
 
-        // Receita diária no período
+        // Receita diária no período — data como string 'YYYY-MM-DD' para evitar conversão de fuso
         const [receitaDiaria] = await connection.query(`
-            SELECT DATE(data_pedido) AS data,
+            SELECT DATE_FORMAT(data_pedido, '%Y-%m-%d') AS data,
                    COALESCE(SUM(valor_total - IFNULL(desconto, 0)), 0) AS valor,
                    COUNT(*) AS pedidos
             FROM pedidos
             WHERE status <> 'cancelado'
               AND data_pedido >= CURRENT_DATE - INTERVAL ? DAY
-            GROUP BY DATE(data_pedido)
+            GROUP BY DATE_FORMAT(data_pedido, '%Y-%m-%d')
             ORDER BY data ASC
         `, [dias]);
 
