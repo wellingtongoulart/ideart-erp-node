@@ -76,9 +76,6 @@ export const relatoriosPage = {
                 <button class="btn btn-secondary" id="exportarExcelBtn">
                     <i class="fas fa-file-excel"></i> Exportar Excel
                 </button>
-                <button class="btn btn-secondary">
-                    <i class="fas fa-search"></i> Buscar
-                </button>
             </div>
             <div class="grid">
                 <div class="grid-item" onclick="abrirRelatorioVendas()">
@@ -138,7 +135,7 @@ export function inicializarRelatorios() {
     });
 }
 
-async function carregarRelatorio(endpoint, titulo) {
+async function carregarRelatorio(endpoint, titulo, tipo) {
     try {
         const response = await fetch(endpoint);
         const data = await response.json();
@@ -146,7 +143,7 @@ async function carregarRelatorio(endpoint, titulo) {
             mostrarErro(data.mensagem || `Erro ao carregar ${titulo.toLowerCase()}`);
             return;
         }
-        exibirRelatorio(titulo, data.dados, data.resumo);
+        exibirRelatorio(titulo, data.dados, data.resumo, tipo, endpoint);
     } catch (erro) {
         console.error('Erro:', erro);
         mostrarErro(`Erro ao carregar ${titulo.toLowerCase()}`);
@@ -154,15 +151,15 @@ async function carregarRelatorio(endpoint, titulo) {
 }
 
 export function abrirRelatorioVendas() {
-    carregarRelatorio('/api/relatorios/vendas', 'Relatório de Vendas');
+    carregarRelatorio('/api/relatorios/vendas', 'Relatório de Vendas', 'vendas');
 }
 
 export function abrirRelatorioProdutos() {
-    carregarRelatorio('/api/relatorios/estoque', 'Relatório de Estoque');
+    carregarRelatorio('/api/relatorios/estoque', 'Relatório de Estoque', 'estoque');
 }
 
 export function abrirRelatorioClientes() {
-    carregarRelatorio('/api/relatorios/clientes', 'Relatório de Clientes');
+    carregarRelatorio('/api/relatorios/clientes', 'Relatório de Clientes', 'clientes');
 }
 
 // TODO: Relatório de Logística desabilitado — reativar quando solicitado.
@@ -196,7 +193,7 @@ function renderizarResumo(resumo) {
 let estadoRelatorioAtual = null;
 let tabelaRelatorio = null;
 
-function exibirRelatorio(titulo, dados, resumo) {
+function exibirRelatorio(titulo, dados, resumo, tipo = null, endpoint = null) {
     const secao = document.getElementById('relatorioDetalhado');
     const tituloEl = document.getElementById('tituloRelatorio');
     const conteudoEl = document.getElementById('conteudoRelatorio');
@@ -204,7 +201,7 @@ function exibirRelatorio(titulo, dados, resumo) {
     tituloEl.textContent = titulo;
 
     const dadosArr = Array.isArray(dados) ? dados : [];
-    estadoRelatorioAtual = { titulo, dados: dadosArr, resumo: resumo || null };
+    estadoRelatorioAtual = { titulo, dados: dadosArr, resumo: resumo || null, tipo, endpoint };
 
     const resumoHtml = renderizarResumo(resumo);
     if (dadosArr.length === 0) {
@@ -236,19 +233,7 @@ function exibirRelatorio(titulo, dados, resumo) {
     secao.scrollIntoView({ behavior: 'smooth' });
 }
 
-function nomeArquivo(titulo, extensao) {
-    const slug = titulo
-        .toLowerCase()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-    const d = new Date();
-    const data = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    return `${slug}-${data}.${extensao}`;
-}
-
-function baixarArquivo(nome, conteudo, mime) {
-    const blob = new Blob([conteudo], { type: mime });
+function baixarBlob(nome, blob) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -257,6 +242,13 @@ function baixarArquivo(nome, conteudo, mime) {
     link.click();
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function extrairNomeArquivo(contentDisposition) {
+    if (!contentDisposition) return null;
+    const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(contentDisposition);
+    if (!match) return null;
+    try { return decodeURIComponent(match[1]); } catch (_) { return match[1]; }
 }
 
 function montarTabelaParaImpressao(titulo, dados, resumo) {
@@ -333,38 +325,38 @@ function gerarRelatorioPDF() {
     janela.document.close();
 }
 
-function escaparCSV(valor) {
-    const texto = String(valor ?? '');
-    if (/[";\r\n]/.test(texto)) {
-        return `"${texto.replace(/"/g, '""')}"`;
-    }
-    return texto;
-}
-
-function exportarRelatorioExcel() {
+async function exportarRelatorioExcel() {
     if (!estadoRelatorioAtual || estadoRelatorioAtual.dados.length === 0) {
         mostrarAviso('Abra um relatório antes de exportar.');
         return;
     }
-    const { titulo, dados, resumo } = estadoRelatorioAtual;
-    const colunas = Object.keys(dados[0]);
-    const separador = ';'; // Excel pt-BR usa ; por padrão
-
-    const linhas = [];
-    if (resumo) {
-        Object.entries(resumo).forEach(([k, v]) => {
-            linhas.push([humanizar(k), formatarTexto(k, v)].map(escaparCSV).join(separador));
-        });
-        linhas.push('');
+    const { titulo, tipo, endpoint } = estadoRelatorioAtual;
+    if (!tipo) {
+        mostrarErro('Não foi possível identificar o tipo do relatório.');
+        return;
     }
-    linhas.push(colunas.map(c => escaparCSV(humanizar(c))).join(separador));
-    dados.forEach(item => {
-        linhas.push(colunas.map(c => escaparCSV(formatarTexto(c, item[c]))).join(separador));
-    });
 
-    const BOM = '\uFEFF'; // faz o Excel reconhecer UTF-8
-    const conteudo = BOM + linhas.join('\r\n');
-    baixarArquivo(nomeArquivo(titulo, 'csv'), conteudo, 'text/csv;charset=utf-8');
+    try {
+        const queryString = endpoint && endpoint.includes('?') ? endpoint.split('?')[1] : '';
+        const url = `/api/relatorios/${tipo}/exportar-xlsx${queryString ? '?' + queryString : ''}`;
+        const resposta = await fetch(url);
+        if (!resposta.ok) {
+            let mensagem = `Erro ao exportar ${titulo.toLowerCase()}`;
+            try {
+                const erro = await resposta.json();
+                mensagem = erro.mensagem || mensagem;
+            } catch (_) { /* resposta pode não ser JSON */ }
+            throw new Error(mensagem);
+        }
+
+        const blob = await resposta.blob();
+        const nome = extrairNomeArquivo(resposta.headers.get('Content-Disposition'))
+            || `${tipo}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        baixarBlob(nome, blob);
+    } catch (erro) {
+        console.error('Erro ao exportar XLSX:', erro);
+        mostrarErro(erro.message || 'Erro ao exportar relatório');
+    }
 }
 
 /**

@@ -157,13 +157,45 @@ export const orcamentosPage = {
 
         <!-- MODAL: selecionar produto cadastrado -->
         <div class="modal" id="orcModalProduto">
-            <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-content" style="max-width: 1000px;">
                 <div class="modal-header">
-                    <h3>Selecionar Produto</h3>
+                    <h3>Selecionar Produtos</h3>
                     <button class="modal-close" id="orcModalProdutoClose">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div id="orcProdutoTableMount"></div>
+
+                    <div class="orc-selecionados-box">
+                        <div class="orc-selecionados-header">
+                            <strong>Produtos selecionados (<span id="orcSelecionadosCount">0</span>)</strong>
+                            <button class="btn btn-secondary btn-small" id="orcSelecionadosLimpar" type="button">
+                                <i class="fas fa-eraser"></i> Limpar lista
+                            </button>
+                        </div>
+                        <div class="table-wrapper" style="max-height:220px; overflow-y:auto;">
+                            <table class="orc-selecionados-table">
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Nome</th>
+                                        <th style="width:90px;">Qtd</th>
+                                        <th style="width:110px;">Valor unit.</th>
+                                        <th style="width:110px;">Subtotal</th>
+                                        <th style="width:40px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="orcSelecionadosTbody">
+                                    <tr><td colspan="6" style="text-align:center; color:#999;">Nenhum produto selecionado</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="orcModalProdutoCancelar" type="button">Cancelar</button>
+                    <button class="btn btn-primary" id="orcModalProdutoConfirmar" type="button">
+                        <i class="fas fa-check"></i> Inserir no orçamento
+                    </button>
                 </div>
             </div>
         </div>
@@ -245,7 +277,8 @@ const orcState = {
     originalSnapshot: null,  // snapshot dos dados carregados para detectar alterações
     produtosCache: [],
     clientes: [],
-    profissionais: []
+    profissionais: [],
+    produtosSelecionados: []  // staging do modal de produtos (antes de inserir no orçamento)
 };
 
 // ====== Inicialização ======
@@ -263,7 +296,10 @@ export function inicializarOrcamentos() {
     on('orcAddProdutoCadBtn', 'click', abrirModalProduto);
     on('orcAddProdutoCustomBtn', 'click', abrirModalCustom);
 
-    on('orcModalProdutoClose', 'click', () => fecharModal('orcModalProduto'));
+    on('orcModalProdutoClose', 'click', cancelarSelecaoProdutos);
+    on('orcModalProdutoCancelar', 'click', cancelarSelecaoProdutos);
+    on('orcModalProdutoConfirmar', 'click', confirmarProdutosSelecionados);
+    on('orcSelecionadosLimpar', 'click', limparProdutosSelecionados);
     on('orcModalCustomClose', 'click', () => fecharModal('orcModalCustom'));
     on('orcModalBaseClose', 'click', () => fecharModal('orcModalBase'));
 
@@ -551,10 +587,7 @@ function renderizarItens() {
                     <input type="number" min="1" step="1" value="${it.quantidade}" style="width:70px;"
                            onchange="alterarQuantidade(${idx}, this.value)"/>
                 </td>
-                <td>
-                    <input type="number" min="0" step="0.01" value="${it.preco_unitario}" style="width:100px;"
-                           onchange="alterarPreco(${idx}, this.value)"/>
-                </td>
+                <td>${formatarMoeda(it.preco_unitario)}</td>
                 <td>${formatarMoeda(subtotal)}</td>
                 <td>
                     <button class="btn-icone" onclick="removerItem(${idx})" title="Remover" style="color:#c62828;">
@@ -577,12 +610,6 @@ export function moverItem(idx, dir) {
 
 export function alterarQuantidade(idx, valor) {
     orcState.itens[idx].quantidade = Math.max(1, parseInt(valor) || 1);
-    renderizarItens();
-    recalcularTotais();
-}
-
-export function alterarPreco(idx, valor) {
-    orcState.itens[idx].preco_unitario = Math.max(0, parseFloat(valor) || 0);
     renderizarItens();
     recalcularTotais();
 }
@@ -632,18 +659,20 @@ function inicializarTabelaProdutosModal() {
               formatar: (p) => formatarMoeda(p.preco_venda || 0) }
         ],
         acoes: (p) => `
-            <button class="btn btn-primary btn-small" onclick="selecionarProduto(${p.id})">Adicionar</button>
+            <button class="btn btn-primary btn-small" onclick="selecionarProduto(${p.id}, this)">Adicionar</button>
         `
     });
     tabelaProdutosModal.inicializar();
 }
 
 function abrirModalProduto() {
+    orcState.produtosSelecionados = [];
+    renderizarProdutosSelecionados();
     abrirModal('orcModalProduto');
     if (tabelaProdutosModal) tabelaProdutosModal.recarregar();
 }
 
-export function selecionarProduto(id) {
+export function selecionarProduto(id, origem) {
     // Preferência: produto carregado agora no modal; fallback: cache geral
     let p = null;
     if (tabelaProdutosModal) {
@@ -653,15 +682,98 @@ export function selecionarProduto(id) {
         p = orcState.produtosCache.find(x => x.id === id);
     }
     if (!p) return;
-    orcState.itens.push({
-        produto_id: p.id,
-        nome: p.nome,
-        sku: p.sku || '-',
-        categoria: p.categoria || '-',
-        fornecedor: p.fornecedor || '-',
-        quantidade: 1,
-        preco_unitario: Number(p.preco_venda) || 0
+
+    // Se o produto já estiver na lista de seleção, incrementa a quantidade
+    const existente = orcState.produtosSelecionados.find(x => x.produto_id === p.id);
+    if (existente) {
+        existente.quantidade = (Number(existente.quantidade) || 0) + 1;
+    } else {
+        orcState.produtosSelecionados.push({
+            produto_id: p.id,
+            nome: p.nome,
+            sku: p.sku || '-',
+            categoria: p.categoria || '-',
+            fornecedor: p.fornecedor || '-',
+            quantidade: 1,
+            preco_unitario: Number(p.preco_venda) || 0
+        });
+    }
+    renderizarProdutosSelecionados();
+
+    // Feedback visual: pisca a linha da tabela em verde claro
+    const tr = origem && origem.closest ? origem.closest('tr') : null;
+    if (tr) {
+        tr.classList.remove('orc-linha-adicionada');
+        // força reflow para permitir disparar a animação novamente em cliques consecutivos
+        void tr.offsetWidth;
+        tr.classList.add('orc-linha-adicionada');
+    }
+}
+
+function renderizarProdutosSelecionados() {
+    const tbody = document.getElementById('orcSelecionadosTbody');
+    const count = document.getElementById('orcSelecionadosCount');
+    if (count) count.textContent = orcState.produtosSelecionados.length;
+    if (!tbody) return;
+
+    if (orcState.produtosSelecionados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">Nenhum produto selecionado</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = orcState.produtosSelecionados.map((it, idx) => {
+        const subtotal = (Number(it.quantidade) || 0) * (Number(it.preco_unitario) || 0);
+        return `
+            <tr>
+                <td>${it.sku || '-'}</td>
+                <td>${it.nome || '-'}</td>
+                <td>
+                    <input type="number" min="1" step="1" value="${it.quantidade}" style="width:70px;"
+                           onchange="alterarQtdSelecionado(${idx}, this.value)"/>
+                </td>
+                <td>${formatarMoeda(it.preco_unitario)}</td>
+                <td>${formatarMoeda(subtotal)}</td>
+                <td>
+                    <button class="btn-icone" onclick="removerSelecionado(${idx})" title="Remover" style="color:#c62828;">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+export function alterarQtdSelecionado(idx, valor) {
+    if (!orcState.produtosSelecionados[idx]) return;
+    orcState.produtosSelecionados[idx].quantidade = Math.max(1, parseInt(valor) || 1);
+    renderizarProdutosSelecionados();
+}
+
+export function removerSelecionado(idx) {
+    orcState.produtosSelecionados.splice(idx, 1);
+    renderizarProdutosSelecionados();
+}
+
+function limparProdutosSelecionados() {
+    if (orcState.produtosSelecionados.length === 0) return;
+    orcState.produtosSelecionados = [];
+    renderizarProdutosSelecionados();
+}
+
+function cancelarSelecaoProdutos() {
+    orcState.produtosSelecionados = [];
+    fecharModal('orcModalProduto');
+}
+
+function confirmarProdutosSelecionados() {
+    if (orcState.produtosSelecionados.length === 0) {
+        alert('Nenhum produto selecionado. Adicione ao menos um produto à lista.');
+        return;
+    }
+    orcState.produtosSelecionados.forEach(sel => {
+        orcState.itens.push({ ...sel });
     });
+    orcState.produtosSelecionados = [];
     fecharModal('orcModalProduto');
     renderizarItens();
     recalcularTotais();
@@ -887,57 +999,37 @@ export async function exportarOrcamentoPDF(id) {
 
 export async function exportarOrcamentoExcel(id) {
     try {
-        const res = await fetch(`/api/orcamentos/${id}/exportacao`);
-        const data = await res.json();
-        if (!data.sucesso) throw new Error(data.mensagem);
-        gerarCSVOrcamento(data.dados);
+        const resposta = await fetch(`/api/orcamentos/${id}/exportar-xlsx`);
+        if (!resposta.ok) {
+            let mensagem = 'Erro ao exportar orçamento';
+            try {
+                const erro = await resposta.json();
+                mensagem = erro.mensagem || mensagem;
+            } catch (_) { /* resposta pode não ser JSON */ }
+            throw new Error(mensagem);
+        }
+
+        const blob = await resposta.blob();
+        const nome = extrairNomeArquivo(resposta.headers.get('Content-Disposition'))
+            || `orcamento-${id}.xlsx`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nome;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
         alert(e.message || 'Erro ao exportar');
     }
 }
 
-function gerarCSVOrcamento({ orcamento, itens, empresa }) {
-    const sep = ';';
-    const linhas = [];
-    linhas.push(['Empresa', empresa.nome_fantasia || ''].join(sep));
-    linhas.push(['Email', empresa.email || ''].join(sep));
-    linhas.push(['Telefone', empresa.telefone || ''].join(sep));
-    linhas.push([]);
-    linhas.push(['Orçamento Nº', orcamento.numero || orcamento.id].join(sep));
-    linhas.push(['Cliente', orcamento.cliente_nome || ''].join(sep));
-    linhas.push(['Email Cliente', orcamento.cliente_email || ''].join(sep));
-    linhas.push(['Telefone Cliente', orcamento.cliente_telefone || ''].join(sep));
-    linhas.push(['Profissional', orcamento.profissional_nome || ''].join(sep));
-    linhas.push(['Data', formatarData(orcamento.data_criacao)].join(sep));
-    linhas.push(['Validade', formatarData(orcamento.data_validade)].join(sep));
-    linhas.push([]);
-    linhas.push(['Código', 'Produto', 'Categoria', 'Quantidade', 'Valor Unitário', 'Valor Total'].join(sep));
-    (itens || []).forEach(it => {
-        linhas.push([
-            it.sku || '-',
-            (it.produto_nome || it.nome_customizado || '').replace(/;/g, ','),
-            it.categoria || '-',
-            it.quantidade,
-            (Number(it.preco_unitario) || 0).toFixed(2).replace('.', ','),
-            (Number(it.subtotal) || 0).toFixed(2).replace('.', ',')
-        ].join(sep));
-    });
-    linhas.push([]);
-    linhas.push(['Desconto (%)', Number(orcamento.desconto) || 0].join(sep));
-    linhas.push(['Total', calcularTotalComDesconto(orcamento).toFixed(2).replace('.', ',')].join(sep));
-    linhas.push(['Forma de Pagamento', orcamento.forma_pagamento || ''].join(sep));
-    linhas.push(['Observações', (orcamento.observacoes || '').replace(/\n/g, ' | ')].join(sep));
-
-    const csv = '\uFEFF' + linhas.map(l => Array.isArray(l) ? l : [l]).map(l => l.join ? l.join(sep) : l).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `orcamento-${orcamento.numero || orcamento.id}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+function extrairNomeArquivo(contentDisposition) {
+    if (!contentDisposition) return null;
+    const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(contentDisposition);
+    if (!match) return null;
+    try { return decodeURIComponent(match[1]); } catch (_) { return match[1]; }
 }
 
 function abrirDocumentoImpressao({ orcamento, itens, empresa }) {
@@ -1111,6 +1203,17 @@ function adicionarEstilosOrcamento() {
         .totals-box { margin-top:1rem; background:#f5f8fc; border-radius:8px; padding:1rem 1.5rem; display:flex; flex-direction:column; gap:.4rem; align-items:flex-end; }
         .totals-box > div { display:flex; gap:1rem; min-width:260px; justify-content:space-between; }
         .totals-box .total-final { border-top:2px solid var(--primary-blue); padding-top:.4rem; margin-top:.25rem; font-size:1.1rem; color: var(--primary-blue); }
+        .orc-selecionados-box { margin-top:1.25rem; border:1px solid var(--border-color); border-radius:8px; background:#f9fbfe; padding:.75rem 1rem; }
+        .orc-selecionados-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem; gap:1rem; flex-wrap:wrap; }
+        .orc-selecionados-table { width:100%; border-collapse:collapse; }
+        .orc-selecionados-table th, .orc-selecionados-table td { padding:.4rem .5rem; font-size:.9rem; border-bottom:1px solid #eef2f7; text-align:left; }
+        .orc-selecionados-table th { background:#eaf1fb; color:var(--primary-blue); position:sticky; top:0; }
+        .orc-selecionados-table input[type=number] { padding:.3rem; border:1px solid #ddd; border-radius:4px; }
+        @keyframes orcLinhaAdicionada {
+            0% { background-color: #c8f7c8; }
+            100% { background-color: transparent; }
+        }
+        .orc-linha-adicionada > td { animation: orcLinhaAdicionada .9s ease-out; }
     `;
     document.head.appendChild(style);
 }
@@ -1124,7 +1227,8 @@ window.exportarOrcamentoPDF = exportarOrcamentoPDF;
 window.exportarOrcamentoExcel = exportarOrcamentoExcel;
 window.moverItem = moverItem;
 window.alterarQuantidade = alterarQuantidade;
-window.alterarPreco = alterarPreco;
 window.removerItem = removerItem;
 window.selecionarProduto = selecionarProduto;
 window.selecionarBase = selecionarBase;
+window.alterarQtdSelecionado = alterarQtdSelecionado;
+window.removerSelecionado = removerSelecionado;

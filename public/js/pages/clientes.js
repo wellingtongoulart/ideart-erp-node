@@ -18,9 +18,6 @@ export const clientesPage = {
                 <button class="btn btn-primary" id="novoClienteBtn">
                     <i class="fas fa-plus"></i> Novo Cliente
                 </button>
-                <button class="btn btn-secondary">
-                    <i class="fas fa-search"></i> Buscar
-                </button>
             </div>
             <div id="clientesTableMount"></div>
         </div>

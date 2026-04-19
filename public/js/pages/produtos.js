@@ -19,9 +19,6 @@ export const produtosPage = {
                 <button class="btn btn-primary" id="novoProdutoBtn">
                     <i class="fas fa-plus"></i> Novo Produto
                 </button>
-                <button class="btn btn-secondary">
-                    <i class="fas fa-search"></i> Buscar
-                </button>
             </div>
             <div id="produtosTableMount"></div>
         </div>
