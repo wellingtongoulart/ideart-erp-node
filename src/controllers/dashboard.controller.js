@@ -10,9 +10,12 @@ exports.resumo = async (req, res) => {
     try {
         // ===== KPIs =====
 
+        // `desconto` é armazenado como percentual (0-100), não como valor absoluto.
+        // Receita líquida = valor_total * (1 - desconto/100).
+
         // Receita do mês atual (pedidos entregues)
         const [[receitaMes]] = await connection.query(`
-            SELECT COALESCE(SUM(valor_total - IFNULL(desconto, 0)), 0) AS total,
+            SELECT COALESCE(SUM(valor_total * (1 - IFNULL(desconto, 0) / 100)), 0) AS total,
                    COUNT(*) AS qtd_pedidos
             FROM pedidos
             WHERE status = 'entregue'
@@ -22,7 +25,7 @@ exports.resumo = async (req, res) => {
 
         // Receita do mês anterior (MoM — month-over-month)
         const [[receitaMesAnterior]] = await connection.query(`
-            SELECT COALESCE(SUM(valor_total - IFNULL(desconto, 0)), 0) AS total
+            SELECT COALESCE(SUM(valor_total * (1 - IFNULL(desconto, 0) / 100)), 0) AS total
             FROM pedidos
             WHERE status = 'entregue'
               AND data_pedido >= DATE_FORMAT(CURRENT_DATE - INTERVAL 1 MONTH, '%Y-%m-01')
@@ -31,7 +34,7 @@ exports.resumo = async (req, res) => {
 
         // Receita do mesmo mês ano anterior (YoY — year-over-year)
         const [[receitaAnoAnterior]] = await connection.query(`
-            SELECT COALESCE(SUM(valor_total - IFNULL(desconto, 0)), 0) AS total
+            SELECT COALESCE(SUM(valor_total * (1 - IFNULL(desconto, 0) / 100)), 0) AS total
             FROM pedidos
             WHERE status = 'entregue'
               AND YEAR(data_pedido) = YEAR(CURRENT_DATE) - 1
@@ -45,9 +48,9 @@ exports.resumo = async (req, res) => {
             WHERE status IN ('pendente', 'processando', 'enviado')
         `);
 
-        // Ticket médio do período selecionado
+        // Ticket médio do período selecionado (líquido, já descontado)
         const [[ticket]] = await connection.query(`
-            SELECT COALESCE(AVG(valor_total), 0) AS valor
+            SELECT COALESCE(AVG(valor_total * (1 - IFNULL(desconto, 0) / 100)), 0) AS valor
             FROM pedidos
             WHERE status <> 'cancelado'
               AND data_pedido >= CURRENT_DATE - INTERVAL ? DAY
@@ -70,7 +73,7 @@ exports.resumo = async (req, res) => {
         // Receita diária no período — data como string 'YYYY-MM-DD' para evitar conversão de fuso
         const [receitaDiaria] = await connection.query(`
             SELECT DATE_FORMAT(data_pedido, '%Y-%m-%d') AS data,
-                   COALESCE(SUM(valor_total - IFNULL(desconto, 0)), 0) AS valor,
+                   COALESCE(SUM(valor_total * (1 - IFNULL(desconto, 0) / 100)), 0) AS valor,
                    COUNT(*) AS pedidos
             FROM pedidos
             WHERE status <> 'cancelado'
@@ -86,9 +89,10 @@ exports.resumo = async (req, res) => {
             GROUP BY status
         `);
 
-        // Orçamentos por status (snapshot geral)
+        // Orçamentos por status (snapshot geral) — valor líquido (já com desconto)
         const [orcamentosPorStatus] = await connection.query(`
-            SELECT status, COUNT(*) AS total, COALESCE(SUM(valor_total), 0) AS valor
+            SELECT status, COUNT(*) AS total,
+                   COALESCE(SUM(valor_total * (1 - IFNULL(desconto, 0) / 100)), 0) AS valor
             FROM orcamentos
             GROUP BY status
         `);
@@ -116,7 +120,7 @@ exports.resumo = async (req, res) => {
             SELECT c.id,
                    c.nome,
                    COUNT(p.id) AS pedidos,
-                   COALESCE(SUM(p.valor_total - IFNULL(p.desconto, 0)), 0) AS valor
+                   COALESCE(SUM(p.valor_total * (1 - IFNULL(p.desconto, 0) / 100)), 0) AS valor
             FROM pedidos p
             INNER JOIN clientes c ON p.cliente_id = c.id
             WHERE p.status <> 'cancelado'
@@ -140,7 +144,8 @@ exports.resumo = async (req, res) => {
             SELECT p.id, p.numero, c.nome AS cliente,
                    p.data_entrega_prevista,
                    DATEDIFF(CURRENT_DATE, p.data_entrega_prevista) AS dias_atraso,
-                   p.status, p.valor_total
+                   p.status,
+                   (p.valor_total * (1 - IFNULL(p.desconto, 0) / 100)) AS valor_total
             FROM pedidos p
             LEFT JOIN clientes c ON p.cliente_id = c.id
             WHERE p.data_entrega_prevista IS NOT NULL
@@ -154,7 +159,7 @@ exports.resumo = async (req, res) => {
             SELECT o.id, o.numero, c.nome AS cliente,
                    o.data_validade,
                    DATEDIFF(o.data_validade, CURRENT_DATE) AS dias_restantes,
-                   o.valor_total
+                   (o.valor_total * (1 - IFNULL(o.desconto, 0) / 100)) AS valor_total
             FROM orcamentos o
             LEFT JOIN clientes c ON o.cliente_id = c.id
             WHERE o.status = 'pendente'
