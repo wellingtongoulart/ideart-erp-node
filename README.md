@@ -198,6 +198,80 @@ Veja [`.env.example`](.env.example) para a lista completa. Todas as variáveis a
 | `CORS_ORIGIN` | Origens permitidas, separadas por vírgula |
 | `APP_BASE_URL` | (opcional) URL pública da API, usada no Swagger |
 | `SEED_EXAMPLE_DATA` | (opcional) `true` para popular dados fictícios em dev |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_SECURE` | (opcional) envio de email para recuperação de senha — ver seção abaixo |
+
+## 📧 Configuração do envio de email (recuperação de senha)
+
+O fluxo "Esqueci minha senha" já está implementado: gera um token, grava na tabela `tokens_recuperacao_senha` e monta o link `/reset-password.html?token=...`. Se o SMTP estiver configurado, o link é enviado por email; caso contrário, aparece apenas no log do servidor (modo útil em desenvolvimento).
+
+### Opções gratuitas
+
+| Provedor | Plano grátis | Indicado para |
+|----------|--------------|---------------|
+| **Brevo** (ex-Sendinblue) | 300 emails/dia | **Produção** — melhor entregabilidade, cadastro só com email |
+| **Resend** | 100/dia, 3.000/mês | Produção com pouco volume |
+| **Gmail** (senha de app) | ~500/dia | Testes rápidos — risco de cair em spam, não recomendado em produção real |
+| **Mailtrap Sandbox** | ilimitado (emails não chegam ao destinatário real) | **Desenvolvimento** — vê como o email ficaria sem spammar ninguém |
+
+### Como configurar — Brevo (recomendado para produção)
+
+1. Crie conta grátis em https://www.brevo.com
+2. No painel, vá em **SMTP & API → SMTP** e clique em **Generate a new SMTP key**
+3. Copie os valores mostrados e preencha no `.env`:
+
+```env
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=587
+SMTP_USER=seu-login@smtp-brevo.com
+SMTP_PASS=sua-chave-smtp-aqui
+SMTP_FROM="Ideart ERP <nao-responda@seudominio.com.br>"
+SMTP_SECURE=false
+```
+
+4. Para uso sério, o Brevo pede que você valide o domínio do `SMTP_FROM` (adicionar registros SPF/DKIM no DNS). Enquanto não validar, use como remetente o próprio email com que se cadastrou.
+5. Reinicie o servidor (`npm run dev`). No próximo "Esqueci minha senha" o log deve mostrar `[recuperacao-senha] Email enviado para ...`.
+
+### Como configurar — Gmail (para testes)
+
+1. Ative a verificação em 2 etapas na sua conta Google (obrigatório).
+2. Acesse https://myaccount.google.com/apppasswords e gere uma **Senha de app** (16 caracteres).
+3. Preencha no `.env`:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=seu-email@gmail.com
+SMTP_PASS=a-senha-de-app-de-16-caracteres
+SMTP_FROM="Ideart ERP <seu-email@gmail.com>"
+SMTP_SECURE=false
+```
+
+> ⚠️ Use Gmail apenas para validar o fluxo. Para produção, prefira Brevo/Resend — o Gmail tem limites baixos e emails automáticos do seu endereço pessoal podem ser marcados como spam pelos destinatários.
+
+### Como configurar — Mailtrap (desenvolvimento, sem spam)
+
+1. Crie conta em https://mailtrap.io → **Email Testing → Inboxes → My Inbox**
+2. Em **SMTP Settings**, selecione **Nodemailer** no dropdown — ele mostra os valores prontos.
+3. Preencha no `.env`:
+
+```env
+SMTP_HOST=sandbox.smtp.mailtrap.io
+SMTP_PORT=2525
+SMTP_USER=xxxxxxxxxxxx
+SMTP_PASS=xxxxxxxxxxxx
+SMTP_FROM="Ideart ERP <teste@exemplo.com>"
+SMTP_SECURE=false
+```
+
+Os emails não chegam ao destinatário real — ficam todos no painel do Mailtrap, ótimo para inspecionar como ficou o HTML sem risco de spammar usuários.
+
+### Testando o envio
+
+1. Na tela de login, clique em **Esqueci minha senha** e informe um usuário/email válido.
+2. Observe o terminal do Node: deve aparecer `[recuperacao-senha] Email enviado para <email>`.
+3. Verifique a caixa de entrada (Mailtrap / Gmail / destinatário real).
+
+Se o log mostrar `Falha ao enviar email`, confira: credenciais SMTP corretas, porta não bloqueada pela rede/firewall, domínio do `SMTP_FROM` compatível com o provedor.
 
 ## 📝 Scripts Disponíveis
 

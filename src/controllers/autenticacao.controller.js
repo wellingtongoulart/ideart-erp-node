@@ -2,6 +2,7 @@ const pool = require('../config/database');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { enviarEmailRecuperacaoSenha } = require('../config/email');
 
 const BCRYPT_SALT_ROUNDS = 10;
 const JWT_EXPIRES_IN = '8h';
@@ -176,9 +177,28 @@ async function solicitarRecuperacaoSenha(req, res) {
                 const host = req.get('host');
                 const resetUrl = `${protocolo}://${host}/reset-password.html?token=${token}`;
 
-                // Enquanto o envio por email não estiver configurado, registra o link
-                // apenas nos logs do servidor. NUNCA retornar o token na resposta HTTP.
+                // Sempre registra o link no log (útil em dev e como fallback
+                // quando o SMTP está offline). NUNCA retornar o token no HTTP.
                 console.log(`[recuperacao-senha] Link gerado para ${usuario.email}: ${resetUrl}`);
+
+                // Envio por email — falhas no SMTP não podem quebrar o fluxo,
+                // então capturamos o erro e apenas logamos. O usuário recebe
+                // a mesma resposta genérica independentemente do resultado.
+                if (usuario.email) {
+                    try {
+                        const resultado = await enviarEmailRecuperacaoSenha({
+                            para: usuario.email,
+                            nomeUsuario: usuario.nome,
+                            resetUrl,
+                            validadeMinutos: TOKEN_VALIDADE_MINUTOS
+                        });
+                        if (resultado.enviado) {
+                            console.log(`[recuperacao-senha] Email enviado para ${usuario.email}`);
+                        }
+                    } catch (erroEmail) {
+                        console.error(`[recuperacao-senha] Falha ao enviar email para ${usuario.email}:`, erroEmail.message);
+                    }
+                }
             }
 
             // Resposta genérica para evitar enumeração de usuários.
