@@ -227,6 +227,16 @@ export const orcamentosPage = {
     `
 };
 
+// `desconto` é armazenado como percentual (0-100); `valor_total` é o bruto.
+// O total exibido nas listagens/impressões precisa aplicar o desconto.
+function calcularTotalComDesconto(registro) {
+    const bruto = Number(registro?.valor_total) || 0;
+    let perc = Number(registro?.desconto) || 0;
+    if (perc < 0) perc = 0;
+    if (perc > 100) perc = 100;
+    return bruto * (1 - perc / 100);
+}
+
 // ====== Estado da página ======
 const orcState = {
     modoEdicao: false,
@@ -308,7 +318,7 @@ function inicializarTabelaOrcamentos() {
             { chave: 'data_validade', rotulo: 'Validade', ordenavel: true,
               formatar: (o) => formatarData(o.data_validade) },
             { chave: 'valor_total', rotulo: 'Valor', ordenavel: true,
-              formatar: (o) => formatarMoeda(o.valor_total || 0) },
+              formatar: (o) => formatarMoeda(calcularTotalComDesconto(o)) },
             { chave: 'status', rotulo: 'Status', ordenavel: true,
               formatar: (o) => `<span class="status-badge" style="background:${corStatusOrc(o.status)};color:#fff;padding:.25rem .5rem;border-radius:4px;font-size:.85rem;">${o.status}</span>` }
         ],
@@ -914,7 +924,7 @@ function gerarCSVOrcamento({ orcamento, itens, empresa }) {
     });
     linhas.push([]);
     linhas.push(['Desconto (%)', Number(orcamento.desconto) || 0].join(sep));
-    linhas.push(['Total', (Number(orcamento.valor_total) || 0).toFixed(2).replace('.', ',')].join(sep));
+    linhas.push(['Total', calcularTotalComDesconto(orcamento).toFixed(2).replace('.', ',')].join(sep));
     linhas.push(['Forma de Pagamento', orcamento.forma_pagamento || ''].join(sep));
     linhas.push(['Observações', (orcamento.observacoes || '').replace(/\n/g, ' | ')].join(sep));
 

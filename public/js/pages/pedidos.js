@@ -52,6 +52,16 @@ const pedState = {
     pedidoAtual: null
 };
 
+// `desconto` é armazenado como percentual (0-100); `valor_total` é o bruto.
+// O total exibido nas listagens/detalhes precisa aplicar o desconto.
+function calcularTotalComDesconto(pedido) {
+    const bruto = Number(pedido?.valor_total) || 0;
+    let perc = Number(pedido?.desconto) || 0;
+    if (perc < 0) perc = 0;
+    if (perc > 100) perc = 100;
+    return bruto * (1 - perc / 100);
+}
+
 const STATUS_PEDIDO_OPCOES = ['pendente', 'processando', 'enviado', 'entregue', 'cancelado'];
 
 export function inicializarPedidos() {
@@ -89,7 +99,7 @@ export function inicializarPedidos() {
             { chave: 'data_pedido', rotulo: 'Data', ordenavel: true,
               formatar: (p) => formatarData(p.data_pedido) },
             { chave: 'valor_total', rotulo: 'Total', ordenavel: true,
-              formatar: (p) => formatarMoeda(p.valor_total || 0) },
+              formatar: (p) => formatarMoeda(calcularTotalComDesconto(p)) },
             { chave: 'status', rotulo: 'Status', ordenavel: true,
               formatar: (p) => renderStatusSelectPed(p) }
         ],
@@ -262,8 +272,9 @@ function renderizarDetalhesPedido({ pedido, itens }) {
         </div>
 
         <div class="totals-box" style="margin-top:1rem;">
+            <div><span>Subtotal:</span> <strong>${formatarMoeda(pedido.valor_total || 0)}</strong></div>
             <div><span>Desconto:</span> <strong>${pedido.desconto || 0}%</strong></div>
-            <div class="total-final"><span>Total:</span> <strong>${formatarMoeda(pedido.valor_total || 0)}</strong></div>
+            <div class="total-final"><span>Total:</span> <strong>${formatarMoeda(calcularTotalComDesconto(pedido))}</strong></div>
         </div>
     `;
 }
