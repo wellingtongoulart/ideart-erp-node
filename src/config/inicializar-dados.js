@@ -125,9 +125,14 @@ async function inicializarDadosExemplo() {
             console.warn('⚠ Não foi possível aplicar migração de orçamentos/pedidos:', e.message);
         }
 
-        // Verificar se já existem produtos
+        // Dados fictícios de exemplo só são inseridos quando SEED_EXAMPLE_DATA=true
+        // (útil para ambiente de dev/demo). Em produção, o banco fica limpo para o cliente.
+        if (process.env.SEED_EXAMPLE_DATA !== 'true') {
+            connection.release();
+            return true;
+        }
+
         const [produtos] = await connection.execute('SELECT COUNT(*) as count FROM produtos');
-        
         if (produtos[0].count > 0) {
             console.log('✓ Dados de exemplo já existem no banco');
             connection.release();

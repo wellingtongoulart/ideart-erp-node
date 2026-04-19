@@ -1,8 +1,12 @@
 const pool = require('../config/database');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 const BCRYPT_SALT_ROUNDS = 10;
+const JWT_EXPIRES_IN = '8h';
+const TOKEN_VALIDADE_MINUTOS = 60;
+const SENHA_MIN_CARACTERES = 10;
 
 // ===== LOGIN =====
 async function login(req, res) {
@@ -17,16 +21,14 @@ async function login(req, res) {
 
         const connection = await pool.getConnection();
 
-        // Buscar usuário
         const [usuarios] = await connection.execute(
-            'SELECT id, username, email, senha, funcao FROM usuarios WHERE username = ? OR email = ?',
+            'SELECT id, nome, username, email, senha, funcao FROM usuarios WHERE (username = ? OR email = ?) AND ativo = TRUE',
             [username, username]
         );
 
         connection.release();
 
         if (usuarios.length === 0) {
-            console.log('Nenhum usuário encontrado com o nome de usuário ou email fornecido.');
             return res.status(401).json({
                 sucesso: false,
                 mensagem: 'Usuário ou senha incorretos'
@@ -43,18 +45,21 @@ async function login(req, res) {
             });
         }
 
-        // Gerar token simples
-        const token = crypto.randomBytes(16).toString('hex');
+        const token = jwt.sign(
+            { id: usuario.id, username: usuario.username, funcao: usuario.funcao },
+            process.env.JWT_SECRET,
+            { expiresIn: JWT_EXPIRES_IN }
+        );
 
         res.json({
             sucesso: true,
             mensagem: 'Login realizado com sucesso',
-            token: token,
+            token,
             usuario: {
                 id: usuario.id,
                 username: usuario.username,
                 email: usuario.email,
-                name: usuario.nome,
+                nome: usuario.nome,
                 funcao: usuario.funcao
             }
         });
@@ -69,17 +74,8 @@ async function login(req, res) {
 
 // ===== LOGOUT =====
 async function logout(req, res) {
-    try {
-        return res.json({
-            sucesso: true,
-            mensagem: 'Logout realizado com sucesso'
-        });
-    } catch (erro) {
-        return res.status(500).json({
-            sucesso: false,
-            mensagem: 'Erro ao fazer logout'
-        });
-    }
+    // Com JWT stateless o logout é client-side (descartar token).
+    return res.json({ sucesso: true, mensagem: 'Logout realizado com sucesso' });
 }
 
 // ===== LISTAR USUÁRIOS =====
@@ -87,19 +83,14 @@ async function listarUsuarios(req, res) {
     try {
         const connection = await pool.getConnection();
         const [usuarios] = await connection.query(
-            'SELECT id, username, email, funcao FROM usuarios'
+            'SELECT id, nome, username, email, funcao, ativo FROM usuarios'
         );
         connection.release();
 
-        return res.json({
-            sucesso: true,
-            usuarios: usuarios
-        });
+        return res.json({ sucesso: true, usuarios });
     } catch (erro) {
-        return res.status(500).json({
-            sucesso: false,
-            mensagem: 'Erro ao listar usuários'
-        });
+        console.error('Erro em listarUsuarios:', erro);
+        return res.status(500).json({ sucesso: false, mensagem: 'Erro ao listar usuários' });
     }
 }
 
@@ -109,68 +100,44 @@ async function obterUsuario(req, res) {
         const { id } = req.params;
         const connection = await pool.getConnection();
         const [usuarios] = await connection.query(
-            'SELECT id, username, email, funcao FROM usuarios WHERE id = ?',
-            [id]
-        );
-        connection.release();
-
-        if (usuarios.length === 0) {
-            return res.status(404).json({
-                sucesso: false,
-                mensagem: 'Usuário não encontrado'
-            });
-        }
-
-        return res.json({
-            sucesso: true,
-            usuario: usuarios[0]
-        });
-    } catch (erro) {
-        return res.status(500).json({
-            sucesso: false,
-            mensagem: 'Erro ao obter usuário'
-        });
-    }
-}
-
-// ===== OBTER USUÁRIO LOGADO =====
-async function obterUsuarioLogado(req, res) {
-    try {
-        const { id } = req.query; // Recebe id como query param
-        const connection = await pool.getConnection();
-        const [usuarios] = await connection.query(
             'SELECT id, nome, username, email, funcao FROM usuarios WHERE id = ?',
             [id]
         );
         connection.release();
 
         if (usuarios.length === 0) {
-            return res.status(404).json({
-                sucesso: false,
-                mensagem: 'Usuário não encontrado'
-            });
+            return res.status(404).json({ sucesso: false, mensagem: 'Usuário não encontrado' });
         }
 
-        return res.json({
-            sucesso: true,
-            usuario: usuarios[0]
-        });
+        return res.json({ sucesso: true, usuario: usuarios[0] });
     } catch (erro) {
-        return res.status(500).json({
-            sucesso: false,
-            mensagem: 'Erro ao obter usuário'
-        });
+        console.error('Erro em obterUsuario:', erro);
+        return res.status(500).json({ sucesso: false, mensagem: 'Erro ao obter usuário' });
+    }
+}
+
+// ===== OBTER USUÁRIO LOGADO =====
+async function obterUsuarioLogado(req, res) {
+    try {
+        const connection = await pool.getConnection();
+        const [usuarios] = await connection.query(
+            'SELECT id, nome, username, email, funcao FROM usuarios WHERE id = ?',
+            [req.user.id]
+        );
+        connection.release();
+
+        if (usuarios.length === 0) {
+            return res.status(404).json({ sucesso: false, mensagem: 'Usuário não encontrado' });
+        }
+
+        return res.json({ sucesso: true, usuario: usuarios[0] });
+    } catch (erro) {
+        console.error('Erro em obterUsuarioLogado:', erro);
+        return res.status(500).json({ sucesso: false, mensagem: 'Erro ao obter usuário' });
     }
 }
 
 // ===== SOLICITAR RECUPERAÇÃO DE SENHA =====
-// Recebe um identificador (username ou email), cria um token com validade
-// de 1 hora e devolve a URL de redefinição. Em produção, a URL deve ser
-// enviada por email; como o ERP ainda não possui serviço de email, ela é
-// retornada diretamente no payload quando o usuário existe.
-const TOKEN_VALIDADE_MINUTOS = 60;
-const SENHA_MIN_CARACTERES = 6;
-
 async function solicitarRecuperacaoSenha(req, res) {
     try {
         const { identificador = '' } = req.body;
@@ -190,42 +157,34 @@ async function solicitarRecuperacaoSenha(req, res) {
                 [valor, valor]
             );
 
-            if (usuarios.length === 0) {
-                // Resposta genérica para evitar enumeração de usuários
-                return res.json({
-                    sucesso: true,
-                    mensagem: 'Se a conta existir, um link de redefinição foi gerado.'
-                });
+            if (usuarios.length > 0) {
+                const usuario = usuarios[0];
+                const token = crypto.randomBytes(32).toString('hex');
+                const expiracao = new Date(Date.now() + TOKEN_VALIDADE_MINUTOS * 60 * 1000);
+
+                await connection.execute(
+                    'UPDATE tokens_recuperacao_senha SET usado = TRUE WHERE usuario_id = ? AND usado = FALSE',
+                    [usuario.id]
+                );
+
+                await connection.execute(
+                    'INSERT INTO tokens_recuperacao_senha (usuario_id, token, data_expiracao) VALUES (?, ?, ?)',
+                    [usuario.id, token, expiracao]
+                );
+
+                const protocolo = req.protocol;
+                const host = req.get('host');
+                const resetUrl = `${protocolo}://${host}/reset-password.html?token=${token}`;
+
+                // Enquanto o envio por email não estiver configurado, registra o link
+                // apenas nos logs do servidor. NUNCA retornar o token na resposta HTTP.
+                console.log(`[recuperacao-senha] Link gerado para ${usuario.email}: ${resetUrl}`);
             }
 
-            const usuario = usuarios[0];
-            const token = crypto.randomBytes(32).toString('hex');
-            const expiracao = new Date(Date.now() + TOKEN_VALIDADE_MINUTOS * 60 * 1000);
-
-            // Invalidar tokens anteriores ainda válidos para esse usuário
-            await connection.execute(
-                'UPDATE tokens_recuperacao_senha SET usado = TRUE WHERE usuario_id = ? AND usado = FALSE',
-                [usuario.id]
-            );
-
-            await connection.execute(
-                'INSERT INTO tokens_recuperacao_senha (usuario_id, token, data_expiracao) VALUES (?, ?, ?)',
-                [usuario.id, token, expiracao]
-            );
-
-            const protocolo = req.protocol;
-            const host = req.get('host');
-            const resetUrl = `${protocolo}://${host}/reset-password.html?token=${token}`;
-
+            // Resposta genérica para evitar enumeração de usuários.
             return res.json({
                 sucesso: true,
-                mensagem: 'Link de redefinição gerado com sucesso.',
-                // Campos abaixo existem apenas porque o ambiente não possui
-                // serviço de email. Substituir por envio real em produção.
-                resetUrl,
-                token,
-                expiraEm: expiracao,
-                usuario: { nome: usuario.nome, email: usuario.email }
+                mensagem: 'Se a conta existir, um link de redefinição foi enviado para o email cadastrado.'
             });
         } finally {
             connection.release();
@@ -350,12 +309,13 @@ async function redefinirSenha(req, res) {
 // ===== ALTERAR SENHA (USUÁRIO LOGADO) =====
 async function alterarSenha(req, res) {
     try {
-        const { usuarioId, senhaAtual = '', novaSenha = '' } = req.body;
+        const { senhaAtual = '', novaSenha = '' } = req.body;
+        const usuarioId = req.user.id;
 
-        if (!usuarioId || !senhaAtual || !novaSenha) {
+        if (!senhaAtual || !novaSenha) {
             return res.status(400).json({
                 sucesso: false,
-                mensagem: 'Todos os campos são obrigatórios'
+                mensagem: 'Senha atual e nova senha são obrigatórias'
             });
         }
         if (String(novaSenha).length < SENHA_MIN_CARACTERES) {

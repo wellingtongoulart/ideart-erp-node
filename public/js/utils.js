@@ -320,6 +320,8 @@ export function handleLogout(e) {
     e.preventDefault();
     if (confirm('Tem certeza que deseja sair?')) {
         sessionStorage.removeItem(APP_CONFIG.sessionKey);
+        sessionStorage.removeItem('user_token');
+        sessionStorage.removeItem('user');
         localStorage.removeItem(APP_CONFIG.userKey);
         window.location.href = '/login.html';
     }
@@ -335,8 +337,8 @@ export function initializeUserProfile() {
         if (userStr) {
             const user = JSON.parse(userStr);
 
-            // Buscar dados atualizados do banco
-            fetch(`/api/autenticacao/user/me?id=${user.id}`)
+            // Buscar dados atualizados do banco (ID vem do JWT no backend)
+            fetch('/api/autenticacao/user/me')
                 .then(response => response.json())
                 .then(data => {
                     if (data.sucesso) {

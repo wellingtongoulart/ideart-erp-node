@@ -84,7 +84,7 @@ export function abrirModalAlterarSenha() {
                 <div class="alert alert-info" id="msg-${MODAL_ID}" style="display:none;"></div>
                 <form id="form-${MODAL_ID}">
                     ${campoSenha('senhaAtual', 'Senha Atual', 'Digite sua senha atual')}
-                    ${campoSenha('novaSenha', 'Nova Senha', 'Mínimo de 6 caracteres')}
+                    ${campoSenha('novaSenha', 'Nova Senha', 'Mínimo de 10 caracteres')}
                     ${campoSenha('confirmarSenha', 'Confirmar Nova Senha', 'Repita a nova senha')}
                 </form>
             </div>
@@ -140,8 +140,8 @@ export function abrirModalAlterarSenha() {
             exibirMensagem(msgEl, 'Preencha todos os campos.', 'erro');
             return;
         }
-        if (nova.length < 6) {
-            exibirMensagem(msgEl, 'A nova senha deve ter pelo menos 6 caracteres.', 'erro');
+        if (nova.length < 10) {
+            exibirMensagem(msgEl, 'A nova senha deve ter pelo menos 10 caracteres.', 'erro');
             return;
         }
         if (nova !== confirmacao) {
@@ -162,7 +162,6 @@ export function abrirModalAlterarSenha() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    usuarioId: user.id,
                     senhaAtual: atual,
                     novaSenha: nova
                 })

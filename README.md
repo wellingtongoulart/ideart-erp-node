@@ -13,32 +13,36 @@ O sistema inclui 8 módulos principais: Produtos, Orçamentos, Pedidos, Clientes
 ## 🚀 Como Começar
 
 ### Pré-requisitos
-- Node.js 14+ instalado
-- npm ou yarn
+- Node.js 18+ instalado
+- MySQL 5.7 ou superior
 - Navegador web moderno
 
 ### Instalação
 
-1. **Clonar o repositório**
-```bash
-cd ideart-erp-node
-```
-
-2. **Instalar dependências**
+1. **Instalar dependências**
 ```bash
 npm install
 ```
 
-3. **Configurar banco de dados** — veja a seção [Configuração do Banco de Dados](#-configuração-do-banco-de-dados) abaixo.
-
-4. **Configurar variáveis de ambiente** — criar um arquivo `.env` na raiz (ver [Environment Variables](#environment-variables)).
-
-5. **Iniciar o servidor**
+2. **Configurar variáveis de ambiente** — copie `.env.example` para `.env` e preencha os valores:
 ```bash
-npm start
+cp .env.example .env
 ```
 
-6. **Acessar a aplicação**
+Gere um `JWT_SECRET` forte com:
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+```
+
+3. **Configurar banco de dados** — veja a seção [Configuração do Banco de Dados](#-configuração-do-banco-de-dados) abaixo.
+
+4. **Iniciar o servidor**
+```bash
+npm start      # produção
+npm run dev    # desenvolvimento (com auto-reload)
+```
+
+5. **Acessar a aplicação**
 ```
 http://localhost:3000
 ```
@@ -66,15 +70,11 @@ Isto cria ou atualiza:
 - Tabelas de autenticação (`usuarios`, `sessoes`, `logs_acesso`, `tokens_recuperacao_senha`)
 - Índices de performance
 - Registro inicial em `empresa_config`
-- 3 usuários padrão: `admin`, `vendedor`, `gerente`
+- 1 usuário administrador inicial: `admin` / `IdeartAdmin@2026` — **troque esta senha no primeiro login** pelo menu "Alterar Senha"
 
 **3. (Opcional) Popular com dados fictícios para testes**:
 
-```bash
-mysql -u root -p ideart_erp < setup-dados-exemplo.sql
-```
-
-Insere produtos, clientes, profissionais, orçamentos, pedidos e logística de exemplo. Também é idempotente (usa `INSERT IGNORE`).
+Em ambientes de desenvolvimento/demo, configure `SEED_EXAMPLE_DATA=true` no `.env` para que a aplicação insira produtos, clientes, pedidos e logística fictícios na primeira vez que subir o servidor com o banco vazio. Em produção, mantenha `SEED_EXAMPLE_DATA=false`.
 
 ### Re-executar o setup
 
@@ -89,21 +89,19 @@ O `setup.sql` pode ser executado novamente a qualquer momento para aplicar novas
 
 ## 🔐 Login
 
-O `setup.sql` cria três usuários padrão: `admin`, `vendedor` e `gerente`. As senhas iniciais estão com hash bcrypt no script — consulte a equipe do projeto para obter as senhas em claro, ou redefina-as via fluxo de recuperação de senha.
+O `setup.sql` cria apenas um usuário administrador inicial:
 
-## 📚 Documentação
+| Usuário | Senha inicial |
+|---------|--------------|
+| `admin` | `IdeartAdmin@2026` |
 
-### Documentos Principais
-- [LOGIN_INTEGRACAO.md](LOGIN_INTEGRACAO.md) - Documentação técnica do sistema de login
-- [GUIA_LOGIN.md](GUIA_LOGIN.md) - Guia de uso da tela de login
-- [STATUS_FINAL.md](STATUS_FINAL.md) - Status e checklist de implementação
-- [RESUMO_LOGIN.md](RESUMO_LOGIN.md) - Resumo executivo da implementação
+⚠️ **Troque a senha no primeiro login** através do menu "Alterar Senha" no canto superior direito. Depois, cadastre os demais usuários pela aplicação.
 
-### Outros Documentos
-- [GUIA_USO.md](GUIA_USO.md) - Guia completo de uso do sistema
-- [INICIO_RAPIDO.md](INICIO_RAPIDO.md) - Início rápido
-- [DESENVOLVIMENTO.md](DESENVOLVIMENTO.md) - Guia de desenvolvimento
-- [TESTES_API.md](TESTES_API.md) - Testes de API
+A senha mínima do sistema é 10 caracteres.
+
+## 📚 Documentação da API
+
+Em desenvolvimento, a documentação OpenAPI fica em `http://localhost:3000/api-docs`. Em produção (`NODE_ENV=production`) o endpoint é desabilitado automaticamente.
 
 ## 📂 Estrutura do Projeto
 
@@ -187,50 +185,27 @@ ideart-erp-node/
 
 ## 🔧 Configuração
 
-### Environment Variables
-Criar arquivo `.env` na raiz do projeto:
+### Variáveis de ambiente
 
-```env
-NODE_ENV=development
-PORT=3000
+Veja [`.env.example`](.env.example) para a lista completa. Todas as variáveis abaixo são **obrigatórias** — o servidor recusa subir sem elas.
 
-# Database
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=
-DB_NAME=ideart_erp
-```
+| Variável | Descrição |
+|----------|-----------|
+| `NODE_ENV` | `development` ou `production` |
+| `PORT` | Porta HTTP do Node (padrão 3000) |
+| `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Conexão MySQL |
+| `JWT_SECRET` | Chave de assinatura do JWT (mín. 48 caracteres aleatórios) |
+| `CORS_ORIGIN` | Origens permitidas, separadas por vírgula |
+| `APP_BASE_URL` | (opcional) URL pública da API, usada no Swagger |
+| `SEED_EXAMPLE_DATA` | (opcional) `true` para popular dados fictícios em dev |
 
 ## 📝 Scripts Disponíveis
 
 ```bash
-# Iniciar servidor em desenvolvimento
-npm start
-
-# Iniciar com nodemon (auto-reload)
-npm run dev
-
-# Executar testes
-npm test
+npm start        # produção
+npm run dev      # desenvolvimento com auto-reload
+npm run db:setup # roda setup.sql no banco configurado em .env
 ```
-
-## 🧪 Testando a Aplicação
-
-### Teste de Login
-1. Acesse http://localhost:3000
-2. Use credenciais: admin / 123456
-3. Você deve ser redirecionado para o dashboard
-
-### Teste de "Lembrar-me"
-1. Na página de login, marque "Lembrar-me"
-2. Faça login
-3. Faça logout
-4. Volte para login.html
-5. O username deve estar pré-preenchido
-
-### Teste de Account Lockout
-1. Tente fazer login com senha errada 5 vezes
-2. A conta deve ser bloqueada por 15 minutos
 
 ## 🐛 Troubleshooting
 
@@ -257,88 +232,147 @@ Verifique credenciais em `.env` e se MySQL está rodando.
 ## 🔐 Segurança
 
 ### Implementado
-- ✅ Validação de entrada
-- ✅ Account lockout
-- ✅ Session timeout
-- ✅ Codificação base64 para credenciais
-- ✅ Proteção de rotas
+- ✅ Autenticação JWT em todas as rotas protegidas
+- ✅ Bcrypt (salt rounds = 10) para hash de senhas
+- ✅ Rate limiting nos endpoints de login e recuperação de senha
+- ✅ Helmet (headers de segurança: X-Frame-Options, HSTS, etc.)
+- ✅ CORS com allowlist configurável por `CORS_ORIGIN`
+- ✅ Queries SQL parametrizadas (proteção contra SQL injection)
+- ✅ Senha mínima de 10 caracteres
+- ✅ Swagger desabilitado em `NODE_ENV=production`
+- ✅ Validação de variáveis de ambiente obrigatórias no startup
+- ✅ Middleware global de erro (sem vazar stack trace em produção)
+- ✅ Graceful shutdown (SIGTERM/SIGINT)
 
-### Recomendado para Produção
-- [ ] HTTPS obrigatório
-- [ ] JWT tokens
-- [ ] httpOnly cookies
-- [ ] CSRF protection
-- [ ] Rate limiting
-- [ ] SQL injection prevention
-- [ ] 2FA (Two-Factor Authentication)
+### Para deploy público, ainda é sua responsabilidade
+- Configurar HTTPS via reverse proxy (Nginx/Caddy + Let's Encrypt)
+- Criar um usuário MySQL dedicado (não use `root`)
+- Configurar backup periódico do banco (ver seção Deploy)
+- Manter dependências atualizadas (`npm audit` regularmente)
 
-## 📊 Estatísticas do Projeto
+## 🚢 Deploy em produção
 
-| Item | Quantidade |
-|------|-----------|
-| Arquivos criados | 3 |
-| Arquivos modificados | 2 |
-| Linhas de código | 1800+ |
-| Documentação | 7 arquivos |
-| Módulos | 8 |
-| Tabelas (DB) | 9 |
+Este guia cobre o cenário recomendado: **VPS Linux + Nginx + PM2 + MySQL**, com aplicação exposta via HTTPS num domínio público.
 
-## 🤝 Contribuindo
+### 1. Preparar o servidor
 
-Para contribuir com o projeto:
+```bash
+# Ubuntu 22.04
+sudo apt update && sudo apt install -y nginx mysql-server
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+sudo npm install -g pm2
+```
 
-1. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-2. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-3. Push para a branch (`git push origin feature/AmazingFeature`)
-4. Abra um Pull Request
+### 2. Criar o banco e o usuário MySQL dedicado
+
+```sql
+CREATE DATABASE ideart_erp CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'ideart_erp'@'localhost' IDENTIFIED BY '<senha-forte-aqui>';
+GRANT ALL PRIVILEGES ON ideart_erp.* TO 'ideart_erp'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+Depois carregue o schema:
+```bash
+mysql -u ideart_erp -p ideart_erp < setup.sql
+```
+
+### 3. Configurar a aplicação
+
+```bash
+git clone <repo-url> /opt/ideart-erp
+cd /opt/ideart-erp
+npm ci --omit=dev
+cp .env.example .env
+# edite .env com os valores de produção:
+# NODE_ENV=production
+# DB_USER=ideart_erp
+# DB_PASSWORD=<a senha criada acima>
+# JWT_SECRET=<gerar com crypto.randomBytes(48).toString('hex')>
+# CORS_ORIGIN=https://erp.seudominio.com.br
+# APP_BASE_URL=https://erp.seudominio.com.br
+# SEED_EXAMPLE_DATA=false
+```
+
+### 4. Subir com PM2
+
+```bash
+pm2 start src/server.js --name ideart-erp
+pm2 save
+pm2 startup    # siga as instruções que aparecerem
+```
+
+Rotação de logs (evita encher o disco):
+```bash
+pm2 install pm2-logrotate
+pm2 set pm2-logrotate:max_size 10M
+pm2 set pm2-logrotate:retain 14
+```
+
+### 5. Nginx + HTTPS (Let's Encrypt)
+
+Arquivo `/etc/nginx/sites-available/ideart-erp`:
+```nginx
+server {
+    listen 80;
+    server_name erp.seudominio.com.br;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Ative e emita o certificado:
+```bash
+sudo ln -s /etc/nginx/sites-available/ideart-erp /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d erp.seudominio.com.br
+```
+
+### 6. Backup diário
+
+Crie `/opt/ideart-erp/backup.sh`:
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+DEST=/opt/backups/ideart-erp
+mkdir -p "$DEST"
+STAMP=$(date +%Y%m%d-%H%M%S)
+mysqldump -u ideart_erp -p"$DB_PASSWORD" ideart_erp | gzip > "$DEST/ideart_erp-$STAMP.sql.gz"
+# mantém 14 dias
+find "$DEST" -name '*.sql.gz' -mtime +14 -delete
+```
+
+Torne executável e adicione ao crontab:
+```bash
+chmod +x /opt/ideart-erp/backup.sh
+(crontab -l 2>/dev/null; echo "0 3 * * * DB_PASSWORD='<senha>' /opt/ideart-erp/backup.sh") | crontab -
+```
+
+**Teste o restore periodicamente** — backup que nunca foi restaurado não é backup. Recomenda-se enviar cópia dos dumps para um bucket S3/B2 off-site.
+
+### 7. Health check
+
+`GET /health` retorna `200` se o Node e o MySQL estão respondendo. Use no monitoramento do Nginx ou em um uptime checker externo (ex: UptimeRobot gratuito).
+
+### 8. Atualizações
+
+```bash
+cd /opt/ideart-erp
+git pull
+npm ci --omit=dev
+mysql -u ideart_erp -p ideart_erp < setup.sql  # idempotente — aplica migrações
+pm2 reload ideart-erp
+```
 
 ## 📄 Licença
 
 Este projeto está sob a licença MIT.
-
-## 👨‍💻 Desenvolvedor
-
-Desenvolvido com ❤️ usando:
-- Node.js
-- Express.js
-- MySQL
-- Vanilla JavaScript
-
-## 📞 Suporte
-
-Para dúvidas ou sugestões, consulte:
-- Documentação: Verifique os arquivos `.md` na pasta raiz
-- Código: Veja comentários no código-fonte
-- Issues: Abra uma issue com sua dúvida
-
-## 🗺️ Roadmap
-
-### v1.0 (Atual)
-- ✅ Sistema de login com autenticação
-- ✅ Dashboard com 8 módulos
-- ✅ Interface responsiva
-- ✅ Dark mode
-- ✅ Documentação completa
-
-### v1.1 (Próximo)
-- [ ] Página de "Esqueci a Senha"
-- [ ] Edição de perfil de usuário
-- [ ] Configurações pessoais
-- [ ] Backend de autenticação real
-
-### v2.0 (Futuro)
-- [ ] JWT tokens
-- [ ] 2FA
-- [ ] API REST completa
-- [ ] Relatórios avançados
-- [ ] Mobile app
-
-## 🙏 Agradecimentos
-
-Obrigado por usar o Ideart ERP!
-
----
-
-**Versão:** 1.0  
-**Última Atualização:** 17 de Janeiro de 2024  
-**Status:** ✅ Funcional
