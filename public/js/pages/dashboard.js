@@ -262,6 +262,7 @@ function renderChartReceita(serie, dias) {
     const canvas = document.getElementById('chartReceita');
     if (!canvas) return;
 
+    const chaveLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const mapa = new Map(serie.map(s => [String(s.data).slice(0, 10), Number(s.valor) || 0]));
     const labels = [];
     const valores = [];
@@ -270,8 +271,7 @@ function renderChartReceita(serie, dias) {
     for (let i = dias - 1; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
-        const chave = d.toISOString().slice(0, 10);
-        const valor = mapa.get(chave) || 0;
+        const valor = mapa.get(chaveLocal(d)) || 0;
         labels.push(d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
         valores.push(valor);
         total += valor;

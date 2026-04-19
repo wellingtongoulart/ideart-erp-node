@@ -153,7 +153,7 @@ exports.buscarPorId = async (req, res) => {
 // POST - Criar novo produto
 exports.criar = async (req, res) => {
     try {
-        const { nome, descricao = '', categoria = '', preco_custo = 0, preco_venda, estoque = 0, sku = '' } = req.body;
+        const { nome, descricao = '', categoria = '', preco_custo = 0, preco_venda, estoque = 0, sku = '', fornecedor = '' } = req.body;
 
         // Validação
         if (!nome) {
@@ -172,18 +172,18 @@ exports.criar = async (req, res) => {
 
         const connection = await pool.getConnection();
 
-        // Verificar se SKU já existe (se fornecido)
+        // Verificar se SKU já existe para este fornecedor (unicidade é por par sku+fornecedor)
         if (sku) {
             const [existente] = await connection.execute(
-                'SELECT id FROM produtos WHERE sku = ?',
-                [sku]
+                'SELECT id FROM produtos WHERE sku = ? AND fornecedor <=> ?',
+                [sku, fornecedor || null]
             );
 
             if (existente.length > 0) {
                 connection.release();
                 return res.status(400).json({
                     sucesso: false,
-                    mensagem: 'Este SKU já está cadastrado'
+                    mensagem: 'Este SKU já está cadastrado para este fornecedor'
                 });
             }
         }
@@ -191,9 +191,9 @@ exports.criar = async (req, res) => {
         // Inserir produto
         const skuFinal = sku || `PROD${Date.now()}`;
         const [result] = await connection.execute(
-            `INSERT INTO produtos (nome, descricao, categoria, preco_custo, preco_venda, estoque, sku, ativo, criado_em, atualizado_em)
-            VALUES (?, ?, ?, ?, ?, ?, ?, true, NOW(), NOW())`,
-            [nome, descricao, categoria, preco_custo, preco_venda, estoque, skuFinal]
+            `INSERT INTO produtos (nome, descricao, categoria, preco_custo, preco_venda, estoque, sku, fornecedor, ativo, criado_em, atualizado_em)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, true, NOW(), NOW())`,
+            [nome, descricao, categoria, preco_custo, preco_venda, estoque, skuFinal, fornecedor]
         );
 
         connection.release();
@@ -221,7 +221,7 @@ exports.criar = async (req, res) => {
 exports.atualizar = async (req, res) => {
     try {
         const { id } = req.params;
-        const { nome, descricao, categoria, preco_custo, preco_venda, estoque, sku, ativo } = req.body;
+        const { nome, descricao, categoria, preco_custo, preco_venda, estoque, sku, fornecedor, ativo } = req.body;
 
         const connection = await pool.getConnection();
 
@@ -276,6 +276,11 @@ exports.atualizar = async (req, res) => {
         if (sku !== undefined) {
             query += ', sku = ?';
             params.push(sku);
+        }
+
+        if (fornecedor !== undefined) {
+            query += ', fornecedor = ?';
+            params.push(fornecedor);
         }
 
         if (ativo !== undefined) {

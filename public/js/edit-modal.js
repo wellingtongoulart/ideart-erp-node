@@ -316,6 +316,7 @@ const editModals = {
     { name: 'descricao', label: 'Descrição', type: 'textarea' },
     { name: 'categoria', label: 'Categoria' },
     { name: 'sku', label: 'SKU' },
+    { name: 'fornecedor', label: 'Fornecedor' },
     { name: 'preco_custo', label: 'Preço de Custo', type: 'number' },
     { name: 'preco_venda', label: 'Preço de Venda', type: 'number', required: true },
     { name: 'estoque', label: 'Estoque', type: 'number' },

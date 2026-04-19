@@ -29,33 +29,67 @@ cd ideart-erp-node
 npm install
 ```
 
-3. **Configurar banco de dados** (opcional)
-```bash
-# Executar script SQL
-mysql -u root -p < setup.sql
-```
+3. **Configurar banco de dados** — veja a seção [Configuração do Banco de Dados](#-configuração-do-banco-de-dados) abaixo.
 
-4. **Iniciar o servidor**
+4. **Configurar variáveis de ambiente** — criar um arquivo `.env` na raiz (ver [Environment Variables](#environment-variables)).
+
+5. **Iniciar o servidor**
 ```bash
 npm start
 ```
 
-5. **Acessar a aplicação**
+6. **Acessar a aplicação**
 ```
 http://localhost:3000
 ```
 
+## 🗄️ Configuração do Banco de Dados
+
+Toda a configuração do schema está consolidada em **um único script idempotente**: [`setup.sql`](setup.sql). Ele cria as tabelas, índices, usuários iniciais e aplica automaticamente as migrações necessárias caso o banco já tenha sido criado em uma versão anterior.
+
+### Passo a passo
+
+**1. Criar a base de dados** (uma única vez):
+
+```bash
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS ideart_erp CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
+
+**2. Executar o setup**:
+
+```bash
+mysql -u root -p ideart_erp < setup.sql
+```
+
+Isto cria ou atualiza:
+- Todas as tabelas de negócio (`clientes`, `produtos`, `orcamentos`, `pedidos`, `pedido_itens`, `orcamento_itens`, `profissionais`, `logistica`, `documentos`, `empresa_config`)
+- Tabelas de autenticação (`usuarios`, `sessoes`, `logs_acesso`, `tokens_recuperacao_senha`)
+- Índices de performance
+- Registro inicial em `empresa_config`
+- 3 usuários padrão: `admin`, `vendedor`, `gerente`
+
+**3. (Opcional) Popular com dados fictícios para testes**:
+
+```bash
+mysql -u root -p ideart_erp < setup-dados-exemplo.sql
+```
+
+Insere produtos, clientes, profissionais, orçamentos, pedidos e logística de exemplo. Também é idempotente (usa `INSERT IGNORE`).
+
+### Re-executar o setup
+
+O `setup.sql` pode ser executado novamente a qualquer momento para aplicar novas migrações sem perder dados existentes. Ele verifica o estado atual do banco via `information_schema` antes de cada alteração.
+
+### Arquivos SQL do projeto
+
+| Arquivo | Papel |
+|---------|-------|
+| [`setup.sql`](setup.sql) | **Obrigatório.** Schema completo + migrações + seeds essenciais (usuários, empresa). |
+| [`setup-dados-exemplo.sql`](setup-dados-exemplo.sql) | Opcional. Dados fictícios para desenvolvimento/testes. |
+
 ## 🔐 Login
 
-### Credenciais de Teste
-
-Use uma das seguintes credenciais para acessar:
-
-| Username | Senha | Tipo |
-|----------|-------|------|
-| admin | 123456 | Administrador |
-| usuario | password | Usuário |
-| user@email.com | senha123 | Usuário |
+O `setup.sql` cria três usuários padrão: `admin`, `vendedor` e `gerente`. As senhas iniciais estão com hash bcrypt no script — consulte a equipe do projeto para obter as senhas em claro, ou redefina-as via fluxo de recuperação de senha.
 
 ## 📚 Documentação
 
@@ -104,7 +138,8 @@ ideart-erp-node/
 │       └── relatorios.js
 │
 ├── package.json                # Dependências do projeto
-├── setup.sql                   # Script SQL de setup
+├── setup.sql                   # Script SQL único (schema + migrações + seeds)
+├── setup-dados-exemplo.sql     # Dados fictícios (opcional)
 └── README.md                   # Este arquivo
 ```
 
