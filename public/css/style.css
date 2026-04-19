@@ -140,6 +140,11 @@ body {
     box-shadow: var(--shadow-hover);
 }
 
+.grid-item {
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
 .grid-item i {
     font-size: 2.5rem;
     color: var(--primary-blue);
@@ -155,6 +160,18 @@ body {
 .grid-item p {
     color: var(--text-color);
     font-size: 0.9rem;
+}
+
+.grid-item--ativo {
+    background-color: #4a90e2;
+    border-color: var(--primary-blue);
+    box-shadow: var(--shadow-hover);
+}
+
+.grid-item--ativo i,
+.grid-item--ativo h3,
+.grid-item--ativo p {
+    color: var(--white);
 }
 
 /* Table Styles */
@@ -260,6 +277,73 @@ tr:last-child td {
 .dt-filtro-sep {
     color: #9ca3af;
     font-weight: 600;
+}
+
+.dt-filtro-limpar {
+    margin-left: auto;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.relatorio-filtros-barra {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin: 1rem 0 0.5rem;
+    flex-wrap: wrap;
+}
+
+.relatorio-filtros-barra .filtros-info {
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
+.relatorio-filtros-barra .filtros-info.ativo {
+    color: var(--primary-blue);
+    font-weight: 600;
+}
+
+.filtros-salvos-barra {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    background: var(--light-blue);
+    border: 1px solid var(--medium-gray);
+    border-radius: 8px;
+}
+
+.filtros-salvos-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary-blue);
+    margin: 0;
+}
+
+.dt-filtros-salvos-barra {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.75rem;
+    background: var(--light-blue);
+    border: 1px solid var(--medium-gray);
+    border-radius: 8px;
+}
+
+.dt-filtros-salvos-barra:empty {
+    display: none;
+}
+
+.dt-filtros-salvos-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary-blue);
+    margin: 0;
 }
 
 .data-table th.dt-th-sortable {

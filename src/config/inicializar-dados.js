@@ -18,6 +18,21 @@ async function garantirTabelaRecuperacaoSenha(connection) {
     `);
 }
 
+async function garantirTabelaFiltrosSalvos(connection) {
+    await connection.execute(`
+        CREATE TABLE IF NOT EXISTS filtros_salvos (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            contexto VARCHAR(100) NOT NULL,
+            nome VARCHAR(150) NOT NULL,
+            valores JSON NOT NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_filtros_contexto_nome (contexto, nome),
+            INDEX idx_contexto (contexto)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+}
+
 // Adiciona coluna somente se não existir (compatível com MySQL < 8.0.21)
 async function garantirColuna(connection, tabela, coluna, definicao) {
     const [rows] = await connection.execute(
@@ -96,6 +111,12 @@ async function inicializarDadosExemplo() {
             await garantirTabelaRecuperacaoSenha(connection);
         } catch (e) {
             console.warn('⚠ Não foi possível garantir a tabela de recuperação de senha:', e.message);
+        }
+
+        try {
+            await garantirTabelaFiltrosSalvos(connection);
+        } catch (e) {
+            console.warn('⚠ Não foi possível garantir a tabela de filtros salvos:', e.message);
         }
 
         try {

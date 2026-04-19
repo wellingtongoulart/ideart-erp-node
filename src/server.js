@@ -28,6 +28,7 @@ const documentosRoutes = require('./routes/documentos');
 const relatoriosRoutes = require('./routes/relatorios');
 const dashboardRoutes = require('./routes/dashboard');
 const autenticacaoRoutes = require('./routes/autenticacao');
+const filtrosSalvosRoutes = require('./routes/filtrosSalvos');
 
 app.use('/api/produtos', produtosRoutes);
 app.use('/api/orcamentos', orcamentosRoutes);
@@ -39,6 +40,7 @@ app.use('/api/documentos', documentosRoutes);
 app.use('/api/relatorios', relatoriosRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/autenticacao', autenticacaoRoutes);
+app.use('/api/filtros-salvos', filtrosSalvosRoutes);
 
 // Rota raiz
 app.get('/', (req, res) => {

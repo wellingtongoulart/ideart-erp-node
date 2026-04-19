@@ -9,11 +9,15 @@ import { DataTable } from '../data-table.js';
 
 const COLUNAS_MOEDA = new Set([
     'valor_total', 'valor_total_gasto', 'preco_venda', 'preco_custo',
-    'receita_bruta', 'receita_liquida', 'desconto_total', 'desconto'
+    'receita_bruta', 'receita_liquida', 'desconto_total', 'desconto',
+    'valor_bruto', 'valor_liquido', 'ticket_medio'
 ]);
 const COLUNAS_DATA = new Set(['data', 'data_pedido', 'data_entrega_prevista', 'data_entrega_real']);
 const COLUNAS_DATA_HORA = new Set(['data_envio', 'data_criacao', 'data_atualizacao']);
-const COLUNAS_INTEIRAS = new Set(['total_pedidos', 'total_itens', 'quantidade_total', 'estoque', 'id']);
+const COLUNAS_INTEIRAS = new Set([
+    'total_pedidos', 'total_itens', 'quantidade_total', 'estoque', 'id',
+    'itens_vendidos', 'clientes_unicos', 'pedidos_entregues', 'pedidos_cancelados', 'dias_com_vendas'
+]);
 
 const LABELS = {
     id: 'ID',
@@ -32,7 +36,16 @@ const LABELS = {
     numero: 'Número',
     cliente: 'Cliente',
     status: 'Status',
-    total_itens: 'Itens'
+    total_itens: 'Itens',
+    valor_bruto: 'Valor bruto',
+    valor_liquido: 'Valor líquido',
+    desconto_total: 'Desconto total',
+    ticket_medio: 'Ticket médio',
+    itens_vendidos: 'Itens vendidos',
+    clientes_unicos: 'Clientes únicos',
+    pedidos_entregues: 'Pedidos entregues',
+    pedidos_cancelados: 'Pedidos cancelados',
+    dias_com_vendas: 'Dias com vendas'
 };
 
 function humanizar(chave) {
@@ -78,17 +91,17 @@ export const relatoriosPage = {
                 </button>
             </div>
             <div class="grid">
-                <div class="grid-item" onclick="abrirRelatorioVendas()">
+                <div class="grid-item" data-tipo="vendas" onclick="abrirRelatorioVendas()">
                     <i class="fas fa-chart-bar"></i>
                     <h3>Vendas</h3>
                     <p>Relatório de vendas e receita</p>
                 </div>
-                <div class="grid-item" onclick="abrirRelatorioProdutos()">
+                <div class="grid-item" data-tipo="estoque" onclick="abrirRelatorioProdutos()">
                     <i class="fas fa-cube"></i>
                     <h3>Estoque</h3>
                     <p>Movimentação de produtos</p>
                 </div>
-                <div class="grid-item" onclick="abrirRelatorioClientes()">
+                <div class="grid-item" data-tipo="clientes" onclick="abrirRelatorioClientes()">
                     <i class="fas fa-users"></i>
                     <h3>Clientes</h3>
                     <p>Base de clientes e análise</p>
@@ -104,7 +117,10 @@ export const relatoriosPage = {
 
             <!-- Seção para exibir relatório detalhado -->
             <div id="relatorioDetalhado" style="margin-top: 30px; display: none;">
-                <h3 id="tituloRelatorio"></h3>
+                <div class="relatorio-filtros-barra">
+                    <h3 id="tituloRelatorio" style="margin:0;"></h3>
+                    <span class="filtros-info" id="filtrosInfo"></span>
+                </div>
                 <div id="conteudoRelatorio"></div>
             </div>
         </div>
@@ -119,20 +135,152 @@ export function inicializarRelatorios() {
     const exportarExcelBtn = document.getElementById('exportarExcelBtn');
     const buscaBtns = document.querySelectorAll('button:has(i.fa-search)');
 
-    // Gerar relatório PDF
     if (gerarRelatorioBtn) {
         gerarRelatorioBtn.addEventListener('click', gerarRelatorioPDF);
     }
 
-    // Exportar para Excel
     if (exportarExcelBtn) {
         exportarExcelBtn.addEventListener('click', exportarRelatorioExcel);
     }
 
-    // Buscar relatórios
     buscaBtns.forEach(btn => {
         btn.addEventListener('click', abrirBuscaRelatorios);
     });
+}
+
+function marcarCartaoAtivo(tipo) {
+    document.querySelectorAll('.grid-item[data-tipo]').forEach(card => {
+        card.classList.toggle('grid-item--ativo', card.dataset.tipo === tipo);
+    });
+}
+
+function opcoesUnicas(dados, campo) {
+    const vistos = new Set();
+    const opcoes = [];
+    dados.forEach(linha => {
+        const valor = linha[campo];
+        if (valor == null || valor === '') return;
+        const chave = String(valor);
+        if (vistos.has(chave)) return;
+        vistos.add(chave);
+        opcoes.push({ valor: chave, rotulo: chave });
+    });
+    opcoes.sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR'));
+    return opcoes;
+}
+
+function construirFiltros(tipo, dados) {
+    const base = [{ chave: '__busca_global__', tipo: 'text', placeholder: 'Filtrar nesta tabela...' }];
+
+    if (tipo === 'vendas') {
+        return [
+            ...base,
+            {
+                tipo: 'date-range', campo: 'data',
+                chaveMin: 'data_min', chaveMax: 'data_max',
+                rotulo: 'Data', placeholderMin: 'De', placeholderMax: 'Até'
+            },
+            {
+                tipo: 'number-range', campo: 'total_pedidos',
+                chaveMin: 'total_pedidos_min', chaveMax: 'total_pedidos_max',
+                rotulo: 'Pedidos', placeholderMin: 'Mín', placeholderMax: 'Máx', step: '1'
+            },
+            {
+                tipo: 'number-range', campo: 'valor_liquido',
+                chaveMin: 'valor_liquido_min', chaveMax: 'valor_liquido_max',
+                rotulo: 'Valor líquido (R$)', placeholderMin: 'Mín', placeholderMax: 'Máx', step: '0.01'
+            },
+            {
+                tipo: 'number-range', campo: 'ticket_medio',
+                chaveMin: 'ticket_medio_min', chaveMax: 'ticket_medio_max',
+                rotulo: 'Ticket médio (R$)', placeholderMin: 'Mín', placeholderMax: 'Máx', step: '0.01'
+            },
+            {
+                tipo: 'number-range', campo: 'itens_vendidos',
+                chaveMin: 'itens_vendidos_min', chaveMax: 'itens_vendidos_max',
+                rotulo: 'Itens vendidos', placeholderMin: 'Mín', placeholderMax: 'Máx', step: '1'
+            }
+        ];
+    }
+
+    if (tipo === 'estoque') {
+        return [
+            ...base,
+            {
+                chave: 'categoria', tipo: 'select',
+                rotulo: 'Categoria', placeholder: 'Todas as categorias',
+                opcoes: opcoesUnicas(dados, 'categoria')
+            },
+            {
+                tipo: 'number-range', campo: 'estoque',
+                chaveMin: 'estoque_min', chaveMax: 'estoque_max',
+                rotulo: 'Estoque', placeholderMin: 'Mín', placeholderMax: 'Máx', step: '1'
+            },
+            {
+                tipo: 'number-range', campo: 'preco_venda',
+                chaveMin: 'preco_venda_min', chaveMax: 'preco_venda_max',
+                rotulo: 'Preço (R$)', placeholderMin: 'Mín', placeholderMax: 'Máx', step: '0.01'
+            },
+            {
+                tipo: 'number-range', campo: 'valor_total',
+                chaveMin: 'valor_total_min', chaveMax: 'valor_total_max',
+                rotulo: 'Valor total (R$)', placeholderMin: 'Mín', placeholderMax: 'Máx', step: '0.01'
+            }
+        ];
+    }
+
+    if (tipo === 'clientes') {
+        return [
+            ...base,
+            {
+                chave: 'cidade', tipo: 'select',
+                rotulo: 'Cidade', placeholder: 'Todas as cidades',
+                opcoes: opcoesUnicas(dados, 'cidade')
+            },
+            {
+                tipo: 'number-range', campo: 'total_pedidos',
+                chaveMin: 'total_pedidos_min', chaveMax: 'total_pedidos_max',
+                rotulo: 'Pedidos', placeholderMin: 'Mín', placeholderMax: 'Máx', step: '1'
+            },
+            {
+                tipo: 'number-range', campo: 'valor_total_gasto',
+                chaveMin: 'valor_total_gasto_min', chaveMax: 'valor_total_gasto_max',
+                rotulo: 'Total gasto (R$)', placeholderMin: 'Mín', placeholderMax: 'Máx', step: '0.01'
+            }
+        ];
+    }
+
+    return base;
+}
+
+function contextoFiltros(tipo) {
+    return `relatorios_${tipo}`;
+}
+
+function atualizarInfoFiltros() {
+    const el = document.getElementById('filtrosInfo');
+    if (!el || !tabelaRelatorio || !estadoRelatorioAtual) return;
+    const valores = tabelaRelatorio.obterValoresFiltros();
+    const ativos = Object.entries(valores).filter(([k, v]) => v !== '' && v != null && k !== '__busca_global__').length;
+    const filtradas = tabelaRelatorio.obterTodasLinhasFiltradas();
+    const total = filtradas.length;
+    if (ativos === 0) {
+        el.textContent = `${total} ${total === 1 ? 'registro' : 'registros'}`;
+        el.classList.remove('ativo');
+    } else {
+        el.textContent = `${ativos} ${ativos === 1 ? 'filtro ativo' : 'filtros ativos'} · ${total} ${total === 1 ? 'registro' : 'registros'}`;
+        el.classList.add('ativo');
+    }
+
+    const resumoAtualizado = recalcularResumo(estadoRelatorioAtual.tipo, filtradas)
+        || estadoRelatorioAtual.resumo;
+    const resumoEl = document.getElementById('resumoRelatorio');
+    if (resumoEl && resumoAtualizado) {
+        const novoHtml = renderizarResumo(resumoAtualizado);
+        const tmp = document.createElement('div');
+        tmp.innerHTML = novoHtml;
+        resumoEl.innerHTML = tmp.firstElementChild ? tmp.firstElementChild.innerHTML : '';
+    }
 }
 
 async function carregarRelatorio(endpoint, titulo, tipo) {
@@ -162,23 +310,6 @@ export function abrirRelatorioClientes() {
     carregarRelatorio('/api/relatorios/clientes', 'Relatório de Clientes', 'clientes');
 }
 
-// TODO: Relatório de Logística desabilitado — reativar quando solicitado.
-// function abrirRelatorioLogistica() {
-//     fetch('/api/relatorios/logistica')
-//         .then(response => response.json())
-//         .then(data => {
-//             if (data.sucesso) {
-//                 exibirRelatorio('Relatório de Logística', data.dados);
-//             } else {
-//                 alert('Erro ao carregar relatório de logística');
-//             }
-//         })
-//         .catch(erro => {
-//             console.error('Erro:', erro);
-//             alert('Erro ao carregar relatório');
-//         });
-// }
-
 function renderizarResumo(resumo) {
     if (!resumo || typeof resumo !== 'object') return '';
     const cards = Object.entries(resumo).map(([chave, valor]) => `
@@ -187,7 +318,7 @@ function renderizarResumo(resumo) {
             <div style="font-size:18px; font-weight:600; color:#111827; margin-top:4px;">${formatarValor(chave, valor)}</div>
         </div>
     `).join('');
-    return `<div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:16px;">${cards}</div>`;
+    return `<div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:16px;" id="resumoRelatorio">${cards}</div>`;
 }
 
 let estadoRelatorioAtual = null;
@@ -199,6 +330,7 @@ function exibirRelatorio(titulo, dados, resumo, tipo = null, endpoint = null) {
     const conteudoEl = document.getElementById('conteudoRelatorio');
 
     tituloEl.textContent = titulo;
+    marcarCartaoAtivo(tipo);
 
     const dadosArr = Array.isArray(dados) ? dados : [];
     estadoRelatorioAtual = { titulo, dados: dadosArr, resumo: resumo || null, tipo, endpoint };
@@ -207,6 +339,7 @@ function exibirRelatorio(titulo, dados, resumo, tipo = null, endpoint = null) {
     if (dadosArr.length === 0) {
         conteudoEl.innerHTML = resumoHtml + '<p>Nenhum dado disponível para este relatório</p>';
         tabelaRelatorio = null;
+        document.getElementById('filtrosInfo').textContent = '';
     } else {
         conteudoEl.innerHTML = resumoHtml + '<div id="relatorioTableMount"></div>';
         const colunas = Object.keys(dadosArr[0]).map(chave => ({
@@ -215,17 +348,19 @@ function exibirRelatorio(titulo, dados, resumo, tipo = null, endpoint = null) {
             ordenavel: true,
             formatar: (linha) => formatarValor(chave, linha[chave])
         }));
+        const filtros = construirFiltros(tipo, dadosArr);
+
         tabelaRelatorio = new DataTable({
             mount: document.getElementById('relatorioTableMount'),
             dadosLocais: dadosArr,
             colunas,
             tamanhoPagina: 15,
-            filtros: [
-                { chave: '__busca_global__', tipo: 'text', placeholder: 'Filtrar nesta tabela...' }
-            ]
+            filtros,
+            filtrosSalvos: { contexto: contextoFiltros(tipo) },
+            onCarregado: () => {
+                if (tabelaRelatorio) atualizarInfoFiltros();
+            }
         });
-        // o filtro global precisa de um chave que não colida com colunas reais.
-        // como buscamos em Object.values(linha), a chave não importa.
         tabelaRelatorio.inicializar();
     }
 
@@ -249,6 +384,52 @@ function extrairNomeArquivo(contentDisposition) {
     const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(contentDisposition);
     if (!match) return null;
     try { return decodeURIComponent(match[1]); } catch (_) { return match[1]; }
+}
+
+function recalcularResumo(tipo, linhas) {
+    if (!linhas || linhas.length === 0) return null;
+    const somar = (chave) => linhas.reduce((s, r) => s + (Number(r[chave]) || 0), 0);
+    if (tipo === 'vendas') {
+        const totalPedidos = somar('total_pedidos');
+        const valorLiquido = somar('valor_liquido');
+        return {
+            dias_com_vendas: linhas.length,
+            total_pedidos: totalPedidos,
+            valor_bruto: somar('valor_bruto'),
+            desconto_total: somar('desconto_total'),
+            valor_liquido: valorLiquido,
+            ticket_medio: totalPedidos > 0 ? valorLiquido / totalPedidos : 0,
+            itens_vendidos: somar('itens_vendidos'),
+            pedidos_entregues: somar('pedidos_entregues'),
+            pedidos_cancelados: somar('pedidos_cancelados')
+        };
+    }
+    if (tipo === 'estoque') {
+        return {
+            total_itens: linhas.length,
+            quantidade_total: somar('estoque'),
+            valor_total: somar('valor_total')
+        };
+    }
+    if (tipo === 'clientes') {
+        return {
+            total_clientes: linhas.length,
+            total_pedidos: somar('total_pedidos'),
+            valor_total_gasto: somar('valor_total_gasto')
+        };
+    }
+    return null;
+}
+
+function obterDadosParaExportar() {
+    if (!estadoRelatorioAtual) return null;
+    if (tabelaRelatorio) {
+        const filtrados = tabelaRelatorio.obterTodasLinhasFiltradas();
+        const resumoRecalculado = recalcularResumo(estadoRelatorioAtual.tipo, filtrados)
+            || estadoRelatorioAtual.resumo;
+        return { dados: filtrados, resumo: resumoRecalculado };
+    }
+    return { dados: estadoRelatorioAtual.dados, resumo: estadoRelatorioAtual.resumo };
 }
 
 function montarTabelaParaImpressao(titulo, dados, resumo) {
@@ -310,11 +491,16 @@ function montarTabelaParaImpressao(titulo, dados, resumo) {
 }
 
 function gerarRelatorioPDF() {
-    if (!estadoRelatorioAtual || estadoRelatorioAtual.dados.length === 0) {
+    if (!estadoRelatorioAtual) {
         mostrarAviso('Abra um relatório antes de exportar.');
         return;
     }
-    const { titulo, dados, resumo } = estadoRelatorioAtual;
+    const { titulo } = estadoRelatorioAtual;
+    const { dados, resumo } = obterDadosParaExportar() || {};
+    if (!dados || dados.length === 0) {
+        mostrarAviso('Nenhum registro disponível com os filtros atuais.');
+        return;
+    }
     const janela = window.open('', '_blank');
     if (!janela) {
         mostrarErro('Permita pop-ups para exportar PDF.');
@@ -326,20 +512,28 @@ function gerarRelatorioPDF() {
 }
 
 async function exportarRelatorioExcel() {
-    if (!estadoRelatorioAtual || estadoRelatorioAtual.dados.length === 0) {
+    if (!estadoRelatorioAtual) {
         mostrarAviso('Abra um relatório antes de exportar.');
         return;
     }
-    const { titulo, tipo, endpoint } = estadoRelatorioAtual;
+    const { titulo, tipo } = estadoRelatorioAtual;
     if (!tipo) {
         mostrarErro('Não foi possível identificar o tipo do relatório.');
         return;
     }
 
+    const { dados, resumo } = obterDadosParaExportar() || {};
+    if (!dados || dados.length === 0) {
+        mostrarAviso('Nenhum registro disponível com os filtros atuais.');
+        return;
+    }
+
     try {
-        const queryString = endpoint && endpoint.includes('?') ? endpoint.split('?')[1] : '';
-        const url = `/api/relatorios/${tipo}/exportar-xlsx${queryString ? '?' + queryString : ''}`;
-        const resposta = await fetch(url);
+        const resposta = await fetch(`/api/relatorios/${tipo}/exportar-xlsx`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dados, resumo })
+        });
         if (!resposta.ok) {
             let mensagem = `Erro ao exportar ${titulo.toLowerCase()}`;
             try {

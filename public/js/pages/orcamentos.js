@@ -325,6 +325,7 @@ function inicializarTabelaOrcamentos() {
         endpoint: '/api/orcamentos',
         tamanhoPagina: 10,
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtrosSalvos: { contexto: 'orcamentos_lista' },
         filtros: [
             { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nº ou cliente...' },
             { chave: 'status', tipo: 'select',

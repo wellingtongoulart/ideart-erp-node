@@ -246,6 +246,18 @@ CREATE TABLE IF NOT EXISTS tokens_recuperacao_senha (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Tokens para recuperação de senha';
 
+CREATE TABLE IF NOT EXISTS filtros_salvos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    contexto VARCHAR(100) NOT NULL,
+    nome VARCHAR(150) NOT NULL,
+    valores JSON NOT NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_filtros_contexto_nome (contexto, nome),
+    INDEX idx_contexto (contexto)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Conjuntos de filtros nomeados, compartilhados entre todos os usuários';
+
 -- =====================================================================
 -- 3. MIGRAÇÕES IDEMPOTENTES (bancos criados em versões anteriores)
 -- =====================================================================
