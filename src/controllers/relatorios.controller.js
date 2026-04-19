@@ -60,8 +60,8 @@ exports.estoque = async (req, res) => {
 
         const resumo = {
             total_itens: estoque.length,
-            quantidade_total: estoque.reduce((sum, p) => sum + p.estoque, 0),
-            valor_total: estoque.reduce((sum, p) => sum + (p.valor_total || 0), 0)
+            quantidade_total: estoque.reduce((sum, p) => sum + (Number(p.estoque) || 0), 0),
+            valor_total: estoque.reduce((sum, p) => sum + (Number(p.valor_total) || 0), 0)
         };
 
         res.json({
