@@ -113,6 +113,7 @@ function inicializarDocumentos() {
         endpoint: '/api/documentos',
         tamanhoPagina: 10,
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtrosSalvos: { contexto: 'documentos_lista' },
         filtros: [
             { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome...' },
             { chave: 'tipo', tipo: 'select',

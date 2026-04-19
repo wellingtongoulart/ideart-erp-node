@@ -98,6 +98,7 @@ export function inicializarClientes() {
         endpoint: '/api/clientes',
         tamanhoPagina: 10,
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtrosSalvos: { contexto: 'clientes_lista' },
         filtros: [
             { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome, email ou telefone...' },
             { chave: 'cidade', tipo: 'text', placeholder: 'Cidade...' },

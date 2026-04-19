@@ -54,6 +54,11 @@ export class DataTable {
         this.extrairPaginacao = opcoes.extrairPaginacao || ((json) => json.paginacao || null);
         this.paramsExtras = opcoes.paramsExtras || (() => ({}));
         this.onCarregado = opcoes.onCarregado || null;
+        // Filtros salvos: quando `filtrosSalvos.contexto` é informado, o componente
+        // renderiza uma barra acima dos filtros com listagem/salvar/excluir
+        // chamando /api/filtros-salvos/:contexto. Compartilhado entre todos os usuários.
+        this.filtrosSalvos = opcoes.filtrosSalvos || null;
+        this._filtrosSalvosCache = [];
 
         this.estado = {
             pagina: 1,
@@ -100,12 +105,62 @@ export class DataTable {
         return this._ultimasLinhas || [];
     }
 
+    obterTodasLinhasFiltradas() {
+        if (!this.dadosLocais) return this.obterLinhas();
+        let resultado = this._aplicarFiltrosLocais(this.dadosLocais.slice());
+        if (this.estado.ordenarPor) {
+            const chave = this.estado.ordenarPor;
+            const dir = this.estado.ordem === 'asc' ? 1 : -1;
+            resultado.sort((a, b) => {
+                const va = a[chave];
+                const vb = b[chave];
+                if (va === vb) return 0;
+                if (va === null || va === undefined) return 1;
+                if (vb === null || vb === undefined) return -1;
+                const na = Number(va), nb = Number(vb);
+                if (!isNaN(na) && !isNaN(nb)) return (na - nb) * dir;
+                return String(va).localeCompare(String(vb), 'pt-BR') * dir;
+            });
+        }
+        return resultado;
+    }
+
+    definirValoresFiltros(valores) {
+        if (!valores || typeof valores !== 'object') return;
+        Object.entries(valores).forEach(([chave, valor]) => {
+            if (!(chave in this.estado.valoresFiltros)) return;
+            this.estado.valoresFiltros[chave] = valor ?? '';
+            const el = this.mount && this.mount.querySelector(`[data-dt-filter="${chave}"]`);
+            if (el) el.value = valor ?? '';
+        });
+        this.estado.pagina = 1;
+        this._recarregar();
+    }
+
+    limparFiltros() {
+        Object.keys(this.estado.valoresFiltros).forEach(chave => {
+            this.estado.valoresFiltros[chave] = '';
+            const el = this.mount && this.mount.querySelector(`[data-dt-filter="${chave}"]`);
+            if (el) el.value = '';
+        });
+        this.estado.pagina = 1;
+        this._recarregar();
+    }
+
+    obterValoresFiltros() {
+        return { ...this.estado.valoresFiltros };
+    }
+
     _renderizarEsqueleto() {
         const totalColunas = this.colunas.length + (this.acoes ? 1 : 0);
         const filtrosHtml = this._renderizarFiltros();
         const cabecalhoHtml = this._renderizarCabecalho();
+        const barraSalvosHtml = this.filtrosSalvos?.contexto
+            ? '<div class="dt-filtros-salvos-barra" data-dt-filtros-salvos></div>'
+            : '';
 
         this.mount.innerHTML = `
+            ${barraSalvosHtml}
             ${filtrosHtml}
             <div class="table-wrapper">
                 <table class="data-table">
@@ -143,12 +198,140 @@ export class DataTable {
                 this._recarregar();
             });
         });
+
+        // Botão "Limpar filtros"
+        const btnLimpar = this.mount.querySelector('[data-dt-limpar-filtros]');
+        if (btnLimpar) {
+            btnLimpar.addEventListener('click', () => this.limparFiltros());
+        }
+
+        // Barra de filtros salvos (carregada async)
+        if (this.filtrosSalvos?.contexto) {
+            this._carregarFiltrosSalvos().catch(() => {});
+        }
+    }
+
+    async _carregarFiltrosSalvos() {
+        try {
+            const res = await fetch(`/api/filtros-salvos/${this.filtrosSalvos.contexto}`);
+            const json = await res.json();
+            this._filtrosSalvosCache = json.sucesso ? (json.dados || []) : [];
+        } catch (_) {
+            this._filtrosSalvosCache = [];
+        }
+        this._renderizarBarraFiltrosSalvos();
+    }
+
+    _renderizarBarraFiltrosSalvos() {
+        const barra = this.mount.querySelector('[data-dt-filtros-salvos]');
+        if (!barra) return;
+        const opcoes = this._filtrosSalvosCache.map(f =>
+            `<option value="${f.id}">${this._escapar(f.nome)}</option>`
+        ).join('');
+        barra.innerHTML = `
+            <label class="dt-filtros-salvos-label">Filtro salvo:</label>
+            <select class="dt-filtro" data-dt-filtros-salvos-select style="max-width:260px;">
+                <option value="">— Selecionar —</option>
+                ${opcoes}
+            </select>
+            <button class="btn btn-secondary btn-small" data-dt-filtros-salvos-aplicar type="button">
+                <i class="fas fa-check"></i> Aplicar
+            </button>
+            <button class="btn btn-secondary btn-small" data-dt-filtros-salvos-salvar type="button">
+                <i class="fas fa-save"></i> Salvar atual
+            </button>
+            <button class="btn btn-secondary btn-small" data-dt-filtros-salvos-excluir type="button" disabled>
+                <i class="fas fa-trash"></i> Excluir
+            </button>
+        `;
+        const seletor = barra.querySelector('[data-dt-filtros-salvos-select]');
+        const btnAplicar = barra.querySelector('[data-dt-filtros-salvos-aplicar]');
+        const btnSalvar = barra.querySelector('[data-dt-filtros-salvos-salvar]');
+        const btnExcluir = barra.querySelector('[data-dt-filtros-salvos-excluir]');
+
+        seletor.addEventListener('change', () => { btnExcluir.disabled = !seletor.value; });
+        btnAplicar.addEventListener('click', () => this._aplicarFiltroSalvo());
+        btnSalvar.addEventListener('click', () => this._salvarFiltroAtual());
+        btnExcluir.addEventListener('click', () => this._excluirFiltroSalvo());
+    }
+
+    _aplicarFiltroSalvo() {
+        const barra = this.mount.querySelector('[data-dt-filtros-salvos]');
+        if (!barra) return;
+        const seletor = barra.querySelector('[data-dt-filtros-salvos-select]');
+        if (!seletor || !seletor.value) return;
+        const filtro = this._filtrosSalvosCache.find(f => String(f.id) === String(seletor.value));
+        if (!filtro) return;
+        this.limparFiltros();
+        this.definirValoresFiltros(filtro.valores || {});
+    }
+
+    async _salvarFiltroAtual() {
+        const valores = this.obterValoresFiltros();
+        const ativos = {};
+        Object.entries(valores).forEach(([k, v]) => {
+            if (v !== '' && v != null) ativos[k] = v;
+        });
+        if (Object.keys(ativos).length === 0) {
+            alert('Aplique pelo menos um filtro antes de salvar.');
+            return;
+        }
+        const barra = this.mount.querySelector('[data-dt-filtros-salvos]');
+        const seletor = barra && barra.querySelector('[data-dt-filtros-salvos-select]');
+        const sugerido = seletor && seletor.value
+            ? (this._filtrosSalvosCache.find(f => String(f.id) === String(seletor.value))?.nome || '')
+            : '';
+        const nome = window.prompt('Nome para este conjunto de filtros:', sugerido);
+        if (!nome || !nome.trim()) return;
+        try {
+            const res = await fetch(`/api/filtros-salvos/${this.filtrosSalvos.contexto}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nome: nome.trim(), valores: ativos })
+            });
+            const json = await res.json();
+            if (!res.ok || !json.sucesso) throw new Error(json.mensagem || 'Erro ao salvar filtro');
+            await this._carregarFiltrosSalvos();
+            const novoSelect = this.mount.querySelector('[data-dt-filtros-salvos-select]');
+            const salvo = this._filtrosSalvosCache.find(f => f.nome === nome.trim());
+            if (novoSelect && salvo) {
+                novoSelect.value = String(salvo.id);
+                const btnExcluir = this.mount.querySelector('[data-dt-filtros-salvos-excluir]');
+                if (btnExcluir) btnExcluir.disabled = false;
+            }
+        } catch (erro) {
+            alert(erro.message || 'Erro ao salvar filtro');
+        }
+    }
+
+    async _excluirFiltroSalvo() {
+        const barra = this.mount.querySelector('[data-dt-filtros-salvos]');
+        if (!barra) return;
+        const seletor = barra.querySelector('[data-dt-filtros-salvos-select]');
+        if (!seletor || !seletor.value) return;
+        const filtro = this._filtrosSalvosCache.find(f => String(f.id) === String(seletor.value));
+        if (!filtro) return;
+        if (!window.confirm(`Excluir o filtro salvo "${filtro.nome}"?`)) return;
+        try {
+            const res = await fetch(`/api/filtros-salvos/${this.filtrosSalvos.contexto}/${filtro.id}`, { method: 'DELETE' });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok || !json.sucesso) throw new Error(json.mensagem || 'Erro ao excluir filtro');
+            await this._carregarFiltrosSalvos();
+        } catch (erro) {
+            alert(erro.message || 'Erro ao excluir filtro');
+        }
     }
 
     _renderizarFiltros() {
         if (this.filtros.length === 0) return '';
         const campos = this.filtros.map(f => this._htmlDoFiltro(f)).join('');
-        return `<div class="dt-filtros">${campos}</div>`;
+        const limpar = `
+            <button type="button" class="btn btn-secondary btn-small dt-filtro-limpar"
+                    data-dt-limpar-filtros title="Limpar todos os filtros">
+                <i class="fas fa-eraser"></i> Limpar filtros
+            </button>
+        `;
+        return `<div class="dt-filtros">${campos}${limpar}</div>`;
     }
 
     _htmlDoFiltro(f) {
@@ -356,13 +539,13 @@ export class DataTable {
         }
     }
 
-    _processarDadosLocais() {
-        let resultado = this.dadosLocais.slice();
-
-        // 1) Aplicar busca textual (filtro de texto) + filtros select
+    _aplicarFiltrosLocais(resultado) {
+        const rangeAplicados = new Set();
         Object.entries(this.estado.valoresFiltros).forEach(([chave, valor]) => {
             if (valor === '' || valor === null || valor === undefined) return;
-            const filtroDef = this.filtros.find(f => f.chave === chave);
+            const filtroDef = this.filtros.find(f =>
+                f.chave === chave || f.chaveMin === chave || f.chaveMax === chave
+            );
             if (!filtroDef) return;
 
             if (filtroDef.tipo === 'text') {
@@ -374,8 +557,47 @@ export class DataTable {
                 );
             } else if (filtroDef.tipo === 'select') {
                 resultado = resultado.filter(linha => String(linha[chave] ?? '') === String(valor));
+            } else if (filtroDef.tipo === 'number-range' || filtroDef.tipo === 'date-range') {
+                const chaveId = `${filtroDef.chaveMin}|${filtroDef.chaveMax}`;
+                if (rangeAplicados.has(chaveId)) return;
+                rangeAplicados.add(chaveId);
+                const campo = filtroDef.campo || filtroDef.chaveMin.replace(/_min$/, '');
+                const minRaw = this.estado.valoresFiltros[filtroDef.chaveMin];
+                const maxRaw = this.estado.valoresFiltros[filtroDef.chaveMax];
+                if (filtroDef.tipo === 'number-range') {
+                    const min = minRaw !== '' && minRaw != null ? Number(minRaw) : null;
+                    const max = maxRaw !== '' && maxRaw != null ? Number(maxRaw) : null;
+                    resultado = resultado.filter(linha => {
+                        const v = Number(linha[campo]);
+                        if (!isFinite(v)) return min === null && max === null;
+                        if (min !== null && v < min) return false;
+                        if (max !== null && v > max) return false;
+                        return true;
+                    });
+                } else {
+                    const paraMs = (v) => {
+                        if (v == null || v === '') return null;
+                        if (v instanceof Date) return v.getTime();
+                        const ms = Date.parse(v);
+                        return isFinite(ms) ? ms : null;
+                    };
+                    const minMs = minRaw ? paraMs(minRaw) : null;
+                    const maxMs = maxRaw ? paraMs(`${maxRaw}T23:59:59`) : null;
+                    resultado = resultado.filter(linha => {
+                        const ms = paraMs(linha[campo]);
+                        if (ms === null) return minMs === null && maxMs === null;
+                        if (minMs !== null && ms < minMs) return false;
+                        if (maxMs !== null && ms > maxMs) return false;
+                        return true;
+                    });
+                }
             }
         });
+        return resultado;
+    }
+
+    _processarDadosLocais() {
+        let resultado = this._aplicarFiltrosLocais(this.dadosLocais.slice());
 
         // 2) Ordenação
         if (this.estado.ordenarPor) {

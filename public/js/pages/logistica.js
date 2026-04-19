@@ -110,6 +110,7 @@ function inicializarLogistica() {
         endpoint: '/api/logistica',
         tamanhoPagina: 10,
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtrosSalvos: { contexto: 'logistica_lista' },
         filtros: [
             { chave: 'busca', tipo: 'text', placeholder: 'Buscar por rastreamento...' },
             { chave: 'status', tipo: 'select',

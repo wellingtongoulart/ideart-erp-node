@@ -15,33 +15,66 @@ const {
     enviarXLSX
 } = require('../utils/xlsxEstilos');
 
+// Monta a query do relatório de vendas (uso compartilhado entre GET e exportação)
+function montarQueryVendas({ data_inicio = '', data_fim = '' } = {}) {
+    let sql = `
+        SELECT
+            DATE(p.data_pedido) AS data,
+            COUNT(DISTINCT p.id) AS total_pedidos,
+            COALESCE(SUM(p.valor_total), 0) AS valor_bruto,
+            COALESCE(SUM(p.desconto), 0) AS desconto_total,
+            COALESCE(SUM(p.valor_total) - SUM(p.desconto), 0) AS valor_liquido,
+            CASE WHEN COUNT(DISTINCT p.id) = 0 THEN 0
+                 ELSE ROUND((COALESCE(SUM(p.valor_total) - SUM(p.desconto), 0)) / COUNT(DISTINCT p.id), 2)
+            END AS ticket_medio,
+            COALESCE(SUM(pi.quantidade), 0) AS itens_vendidos,
+            COUNT(DISTINCT p.cliente_id) AS clientes_unicos,
+            SUM(CASE WHEN p.status = 'entregue' THEN 1 ELSE 0 END) AS pedidos_entregues,
+            SUM(CASE WHEN p.status = 'cancelado' THEN 1 ELSE 0 END) AS pedidos_cancelados
+        FROM pedidos p
+        LEFT JOIN pedido_itens pi ON pi.pedido_id = p.id
+        WHERE 1=1
+    `;
+    const params = [];
+    if (data_inicio) { sql += ' AND p.data_pedido >= ?'; params.push(data_inicio); }
+    if (data_fim) { sql += ' AND p.data_pedido <= ?'; params.push(data_fim); }
+    sql += ' GROUP BY DATE(p.data_pedido) ORDER BY data DESC';
+    return { sql, params };
+}
+
+function calcularResumoVendas(rows) {
+    const totalPedidos = rows.reduce((s, r) => s + (Number(r.total_pedidos) || 0), 0);
+    const valorBruto = rows.reduce((s, r) => s + (Number(r.valor_bruto) || 0), 0);
+    const descontoTotal = rows.reduce((s, r) => s + (Number(r.desconto_total) || 0), 0);
+    const valorLiquido = rows.reduce((s, r) => s + (Number(r.valor_liquido) || 0), 0);
+    const itensVendidos = rows.reduce((s, r) => s + (Number(r.itens_vendidos) || 0), 0);
+    const pedidosEntregues = rows.reduce((s, r) => s + (Number(r.pedidos_entregues) || 0), 0);
+    const pedidosCancelados = rows.reduce((s, r) => s + (Number(r.pedidos_cancelados) || 0), 0);
+    return {
+        dias_com_vendas: rows.length,
+        total_pedidos: totalPedidos,
+        valor_bruto: valorBruto,
+        desconto_total: descontoTotal,
+        valor_liquido: valorLiquido,
+        ticket_medio: totalPedidos > 0 ? valorLiquido / totalPedidos : 0,
+        itens_vendidos: itensVendidos,
+        pedidos_entregues: pedidosEntregues,
+        pedidos_cancelados: pedidosCancelados
+    };
+}
+
 // GET - Relatório de Vendas
 exports.vendas = async (req, res) => {
     try {
-        const { data_inicio = '', data_fim = '' } = req.query;
         const connection = await pool.getConnection();
-
-        let query = 'SELECT DATE(p.data_pedido) as data, COUNT(p.id) as total_pedidos, SUM(p.valor_total) as valor_total FROM pedidos p WHERE 1=1';
-        let params = [];
-
-        if (data_inicio) {
-            query += ' AND p.data_pedido >= ?';
-            params.push(data_inicio);
-        }
-
-        if (data_fim) {
-            query += ' AND p.data_pedido <= ?';
-            params.push(data_fim);
-        }
-
-        query += ' GROUP BY DATE(p.data_pedido) ORDER BY data DESC';
-
-        const [vendas] = await connection.execute(query, params);
+        const { sql, params } = montarQueryVendas(req.query);
+        const [vendas] = await connection.execute(sql, params);
         connection.release();
 
         res.json({
             sucesso: true,
             mensagem: 'Relatório de vendas gerado com sucesso',
+            resumo: calcularResumoVendas(vendas),
             dados: vendas
         });
     } catch (erro) {
@@ -318,16 +351,28 @@ const LABELS_COLUNAS = {
     receita_bruta: 'Receita bruta',
     receita_liquida: 'Receita líquida',
     desconto_total: 'Desconto total',
-    desconto: 'Desconto'
+    desconto: 'Desconto',
+    valor_bruto: 'Valor bruto',
+    valor_liquido: 'Valor líquido',
+    ticket_medio: 'Ticket médio',
+    itens_vendidos: 'Itens vendidos',
+    clientes_unicos: 'Clientes únicos',
+    pedidos_entregues: 'Pedidos entregues',
+    pedidos_cancelados: 'Pedidos cancelados',
+    dias_com_vendas: 'Dias com vendas'
 };
 
 const COLUNAS_MOEDA = new Set([
     'valor_total', 'valor_total_gasto', 'preco_venda', 'preco_custo',
-    'receita_bruta', 'receita_liquida', 'desconto_total', 'desconto', 'total_gasto'
+    'receita_bruta', 'receita_liquida', 'desconto_total', 'desconto', 'total_gasto',
+    'valor_bruto', 'valor_liquido', 'ticket_medio'
 ]);
 const COLUNAS_DATA = new Set(['data', 'data_pedido', 'data_entrega_prevista', 'data_entrega_real']);
 const COLUNAS_DATA_HORA = new Set(['data_envio', 'data_criacao', 'data_atualizacao']);
-const COLUNAS_INTEIRAS = new Set(['total_pedidos', 'total_itens', 'quantidade_total', 'estoque']);
+const COLUNAS_INTEIRAS = new Set([
+    'total_pedidos', 'total_itens', 'quantidade_total', 'estoque',
+    'itens_vendidos', 'clientes_unicos', 'pedidos_entregues', 'pedidos_cancelados', 'dias_com_vendas'
+]);
 
 function humanizar(chave) {
     if (LABELS_COLUNAS[chave]) return LABELS_COLUNAS[chave];
@@ -375,21 +420,15 @@ const RELATORIOS_DISPONIVEIS = {
     vendas: {
         titulo: 'Relatório de Vendas',
         filtros: ['data_inicio', 'data_fim'],
-        ordem: ['data', 'total_pedidos', 'valor_total'],
+        ordem: [
+            'data', 'total_pedidos', 'valor_bruto', 'desconto_total', 'valor_liquido',
+            'ticket_medio', 'itens_vendidos', 'clientes_unicos',
+            'pedidos_entregues', 'pedidos_cancelados'
+        ],
         obterDados: async (conn, query) => {
-            const { data_inicio = '', data_fim = '' } = query;
-            let sql = 'SELECT DATE(p.data_pedido) as data, COUNT(p.id) as total_pedidos, SUM(p.valor_total) as valor_total FROM pedidos p WHERE 1=1';
-            const params = [];
-            if (data_inicio) { sql += ' AND p.data_pedido >= ?'; params.push(data_inicio); }
-            if (data_fim) { sql += ' AND p.data_pedido <= ?'; params.push(data_fim); }
-            sql += ' GROUP BY DATE(p.data_pedido) ORDER BY data DESC';
+            const { sql, params } = montarQueryVendas(query);
             const [rows] = await conn.execute(sql, params);
-            const resumo = {
-                total_pedidos: rows.reduce((s, r) => s + (Number(r.total_pedidos) || 0), 0),
-                valor_total: rows.reduce((s, r) => s + (Number(r.valor_total) || 0), 0),
-                dias_com_vendas: rows.length
-            };
-            return { dados: rows, resumo };
+            return { dados: rows, resumo: calcularResumoVendas(rows) };
         }
     },
     estoque: {
@@ -508,19 +547,7 @@ const RELATORIOS_DISPONIVEIS = {
     }
 };
 
-exports.exportarXLSX = async (req, res) => {
-    const { tipo } = req.params;
-    const definicao = RELATORIOS_DISPONIVEIS[tipo];
-    if (!definicao) {
-        return res.status(400).json({ sucesso: false, mensagem: `Tipo de relatório inválido: ${tipo}` });
-    }
-
-    let connection;
-    try {
-        connection = await pool.getConnection();
-        const { dados, resumo } = await definicao.obterDados(connection, req.query);
-        connection.release();
-
+async function gerarWorkbookRelatorio(definicao, dados, resumo, subtituloExtra = '') {
         const workbook = new ExcelJS.Workbook();
         workbook.creator = 'Ideart ERP';
         workbook.created = new Date();
@@ -540,12 +567,8 @@ exports.exportarXLSX = async (req, res) => {
         aplicarTituloPrincipal(ws, definicao.titulo.toUpperCase(), totalColunas);
 
         // Subtítulo com data de geração e filtros aplicados
-        const filtrosAplicados = definicao.filtros
-            .filter(f => req.query[f])
-            .map(f => `${humanizar(f)}: ${req.query[f]}`)
-            .join('  |  ');
-        const subTexto = filtrosAplicados
-            ? `Gerado em ${new Date().toLocaleString('pt-BR')}  |  ${filtrosAplicados}`
+        const subTexto = subtituloExtra
+            ? `Gerado em ${new Date().toLocaleString('pt-BR')}  |  ${subtituloExtra}`
             : `Gerado em ${new Date().toLocaleString('pt-BR')}`;
         ws.mergeCells(2, 1, 2, totalColunas);
         const celSub = ws.getCell(2, 1);
@@ -703,10 +726,61 @@ exports.exportarXLSX = async (req, res) => {
 
         ajustarLarguraColunas(ws, { min: 10, max: 55, padding: 3 });
 
+        return workbook;
+}
+
+function formatarFiltrosSubtitulo(definicao, query) {
+    return (definicao.filtros || [])
+        .filter(f => query && query[f])
+        .map(f => `${humanizar(f)}: ${query[f]}`)
+        .join('  |  ');
+}
+
+exports.exportarXLSX = async (req, res) => {
+    const { tipo } = req.params;
+    const definicao = RELATORIOS_DISPONIVEIS[tipo];
+    if (!definicao) {
+        return res.status(400).json({ sucesso: false, mensagem: `Tipo de relatório inválido: ${tipo}` });
+    }
+
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        const { dados, resumo } = await definicao.obterDados(connection, req.query);
+        connection.release();
+
+        const subtitulo = formatarFiltrosSubtitulo(definicao, req.query);
+        const workbook = await gerarWorkbookRelatorio(definicao, dados, resumo, subtitulo);
         const nomeArquivo = formatarNomeArquivo(definicao.titulo, 'xlsx');
         await enviarXLSX(res, workbook, nomeArquivo);
     } catch (erro) {
         if (connection) try { connection.release(); } catch (_) {}
+        res.status(500).json({ sucesso: false, mensagem: 'Erro ao gerar XLSX', erro: erro.message });
+    }
+};
+
+exports.exportarXLSXFiltrado = async (req, res) => {
+    const { tipo } = req.params;
+    const definicao = RELATORIOS_DISPONIVEIS[tipo];
+    if (!definicao) {
+        return res.status(400).json({ sucesso: false, mensagem: `Tipo de relatório inválido: ${tipo}` });
+    }
+
+    try {
+        const { dados, resumo } = req.body || {};
+        if (!Array.isArray(dados)) {
+            return res.status(400).json({ sucesso: false, mensagem: 'Corpo inválido: "dados" deve ser um array.' });
+        }
+
+        const workbook = await gerarWorkbookRelatorio(
+            definicao,
+            dados,
+            resumo && typeof resumo === 'object' ? resumo : null,
+            'Exportação com filtros aplicados no cliente'
+        );
+        const nomeArquivo = formatarNomeArquivo(definicao.titulo, 'xlsx');
+        await enviarXLSX(res, workbook, nomeArquivo);
+    } catch (erro) {
         res.status(500).json({ sucesso: false, mensagem: 'Erro ao gerar XLSX', erro: erro.message });
     }
 };

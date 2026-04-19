@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const relatoriosController = require('../controllers/relatorios.controller');
 
+// Exportações filtradas podem carregar datasets grandes no corpo da requisição.
+const jsonGrande = express.json({ limit: '10mb' });
+
 /**
  * @openapi
  * /api/relatorios/vendas:
@@ -195,5 +198,31 @@ router.get('/logistica', relatoriosController.logistica);
  *         description: Tipo de relatório a ser exportado
  */
 router.get('/:tipo/exportar-xlsx', relatoriosController.exportarXLSX);
+
+/**
+ * @openapi
+ * /api/relatorios/{tipo}/exportar-xlsx:
+ *   post:
+ *     tags: [Relatorios]
+ *     summary: Exporta um XLSX estilizado a partir de dados já filtrados no cliente
+ *     parameters:
+ *       - in: path
+ *         name: tipo
+ *         required: true
+ *         schema: { type: string, enum: [vendas, estoque, financeiro, clientes, pedidos, logistica] }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               dados:
+ *                 type: array
+ *                 items: { type: object }
+ *               resumo:
+ *                 type: object
+ */
+router.post('/:tipo/exportar-xlsx', jsonGrande, relatoriosController.exportarXLSXFiltrado);
 
 module.exports = router;

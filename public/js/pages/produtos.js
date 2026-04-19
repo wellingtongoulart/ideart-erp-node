@@ -110,6 +110,7 @@ export function inicializarProdutos() {
         endpoint: '/api/produtos',
         tamanhoPagina: 10,
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtrosSalvos: { contexto: 'produtos_lista' },
         filtros: [
             { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome ou SKU...' },
             { chave: 'categoria', tipo: 'select',

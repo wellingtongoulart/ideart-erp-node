@@ -72,6 +72,7 @@ export function inicializarPedidos() {
         endpoint: '/api/pedidos',
         tamanhoPagina: 10,
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtrosSalvos: { contexto: 'pedidos_lista' },
         filtros: [
             { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nº ou cliente...' },
             { chave: 'status', tipo: 'select',

@@ -115,6 +115,7 @@ export function inicializarProfissionais() {
         endpoint: '/api/profissionais',
         tamanhoPagina: 10,
         ordenacaoPadrao: { chave: 'criado_em', direcao: 'desc' },
+        filtrosSalvos: { contexto: 'profissionais_lista' },
         filtros: [
             { chave: 'busca', tipo: 'text', placeholder: 'Buscar por nome, email ou CPF...' },
             { chave: 'especialidade', tipo: 'select',
