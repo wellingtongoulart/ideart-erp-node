@@ -18,9 +18,6 @@ export const profissionaisPage = {
                 <button class="btn btn-primary" id="novoProfissionalBtn">
                     <i class="fas fa-plus"></i> Novo Profissional
                 </button>
-                <button class="btn btn-secondary">
-                    <i class="fas fa-search"></i> Buscar
-                </button>
             </div>
             <div id="profissionaisTableMount"></div>
         </div>

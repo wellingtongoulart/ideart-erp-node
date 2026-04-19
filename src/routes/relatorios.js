@@ -181,4 +181,19 @@ router.get('/pedidos', relatoriosController.pedidos);
  */
 router.get('/logistica', relatoriosController.logistica);
 
+/**
+ * @openapi
+ * /api/relatorios/{tipo}/exportar-xlsx:
+ *   get:
+ *     tags: [Relatorios]
+ *     summary: Gera e retorna o arquivo XLSX estilizado do relatório
+ *     parameters:
+ *       - in: path
+ *         name: tipo
+ *         required: true
+ *         schema: { type: string, enum: [vendas, estoque, financeiro, clientes, pedidos, logistica] }
+ *         description: Tipo de relatório a ser exportado
+ */
+router.get('/:tipo/exportar-xlsx', relatoriosController.exportarXLSX);
+
 module.exports = router;

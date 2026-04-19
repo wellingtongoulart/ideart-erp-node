@@ -1,6 +1,20 @@
 // Controller de Orçamentos
+const ExcelJS = require('exceljs');
 const pool = require('../config/database');
 const { montarOrderBy } = require('../utils/ordenacao');
+const {
+    CORES,
+    FONTES,
+    preenchimento,
+    bordaFina,
+    aplicarEstiloCabecalho,
+    aplicarEstiloLinha,
+    aplicarTituloPrincipal,
+    aplicarSubtitulo,
+    ajustarLarguraColunas,
+    formatarNomeArquivo,
+    enviarXLSX
+} = require('../utils/xlsxEstilos');
 
 const COLUNAS_ORDENACAO_ORCAMENTOS = {
     id: 'o.id',
@@ -478,6 +492,262 @@ exports.dadosExportacao = async (req, res) => {
         });
     } catch (erro) {
         res.status(500).json({ sucesso: false, mensagem: 'Erro ao carregar dados de exportação', erro: erro.message });
+    }
+};
+
+function formatarDataBR(data) {
+    if (!data) return '-';
+    const d = new Date(data);
+    if (Number.isNaN(d.getTime())) return '-';
+    return d.toLocaleDateString('pt-BR');
+}
+
+// GET - Gera e envia arquivo XLSX estilizado do orçamento
+exports.exportarXLSX = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const connection = await pool.getConnection();
+
+        const [orcamentos] = await connection.execute(
+            `SELECT o.*,
+                    c.nome AS cliente_nome, c.email AS cliente_email, c.telefone AS cliente_telefone,
+                    c.endereco AS cliente_endereco, c.cidade AS cliente_cidade, c.estado AS cliente_estado,
+                    pr.nome AS profissional_nome, pr.especialidade AS profissional_especialidade
+             FROM orcamentos o
+             LEFT JOIN clientes c ON o.cliente_id = c.id
+             LEFT JOIN profissionais pr ON o.profissional_id = pr.id
+             WHERE o.id = ?`,
+            [id]
+        );
+
+        if (orcamentos.length === 0) {
+            connection.release();
+            return res.status(404).json({ sucesso: false, mensagem: 'Orçamento não encontrado' });
+        }
+
+        const orcamento = orcamentos[0];
+        const itens = await carregarItensOrcamento(connection, id);
+
+        let empresa = {
+            nome_fantasia: 'Ideart',
+            email: 'contato@ideart.com.br',
+            telefone: '(11) 0000-0000',
+            endereco: '', cidade: '', estado: ''
+        };
+        try {
+            const [empresas] = await connection.execute('SELECT * FROM empresa_config LIMIT 1');
+            if (empresas.length > 0) empresa = empresas[0];
+        } catch (_) { /* tabela pode não existir ainda */ }
+
+        connection.release();
+
+        const subtotal = (itens || []).reduce((s, it) => s + (Number(it.subtotal) || 0), 0);
+        let descPerc = Number(orcamento.desconto) || 0;
+        if (descPerc < 0) descPerc = 0;
+        if (descPerc > 100) descPerc = 100;
+        const descValor = subtotal * (descPerc / 100);
+        const total = subtotal - descValor;
+
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = empresa.nome_fantasia || 'Ideart';
+        workbook.created = new Date();
+
+        const ws = workbook.addWorksheet('Orçamento', {
+            pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1 },
+            views: [{ showGridLines: false }]
+        });
+
+        ws.columns = [
+            { key: 'codigo', width: 12 },
+            { key: 'produto', width: 38 },
+            { key: 'categoria', width: 18 },
+            { key: 'quantidade', width: 12 },
+            { key: 'unitario', width: 16 },
+            { key: 'total', width: 16 }
+        ];
+
+        // Título
+        aplicarTituloPrincipal(ws, `ORÇAMENTO Nº ${orcamento.numero || orcamento.id}`, 6);
+
+        // Dados da empresa
+        aplicarSubtitulo(ws, 2, 'DADOS DA EMPRESA', 6);
+        const infoEmpresa = [
+            ['Empresa', empresa.nome_fantasia || '-', 'Telefone', empresa.telefone || '-'],
+            ['E-mail', empresa.email || '-', 'Endereço', [empresa.endereco, empresa.cidade, empresa.estado].filter(Boolean).join(' - ') || '-']
+        ];
+        infoEmpresa.forEach((linha, idx) => {
+            const linhaNum = 3 + idx;
+            ws.getCell(`A${linhaNum}`).value = linha[0];
+            ws.getCell(`A${linhaNum}`).font = FONTES.rotulo;
+            ws.getCell(`A${linhaNum}`).fill = preenchimento(CORES.cinzaClaro);
+            ws.getCell(`A${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'right' };
+            ws.mergeCells(`B${linhaNum}:C${linhaNum}`);
+            ws.getCell(`B${linhaNum}`).value = linha[1];
+            ws.getCell(`B${linhaNum}`).font = FONTES.corpo;
+            ws.getCell(`B${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+            ws.getCell(`D${linhaNum}`).value = linha[2];
+            ws.getCell(`D${linhaNum}`).font = FONTES.rotulo;
+            ws.getCell(`D${linhaNum}`).fill = preenchimento(CORES.cinzaClaro);
+            ws.getCell(`D${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'right' };
+            ws.mergeCells(`E${linhaNum}:F${linhaNum}`);
+            ws.getCell(`E${linhaNum}`).value = linha[3];
+            ws.getCell(`E${linhaNum}`).font = FONTES.corpo;
+            ws.getCell(`E${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+            for (const col of ['A', 'B', 'D', 'E']) {
+                ws.getCell(`${col}${linhaNum}`).border = bordaFina(CORES.cinzaMedio);
+            }
+            ws.getRow(linhaNum).height = 20;
+        });
+
+        // Dados do cliente
+        aplicarSubtitulo(ws, 6, 'DADOS DO CLIENTE', 6);
+        const infoCliente = [
+            ['Cliente', orcamento.cliente_nome || '-', 'Data', formatarDataBR(orcamento.data_criacao)],
+            ['E-mail', orcamento.cliente_email || '-', 'Validade', formatarDataBR(orcamento.data_validade)],
+            ['Telefone', orcamento.cliente_telefone || '-', 'Cidade/Estado', [orcamento.cliente_cidade, orcamento.cliente_estado].filter(Boolean).join(' / ') || '-'],
+            ['Profissional', orcamento.profissional_nome || '-', 'Especialidade', orcamento.profissional_especialidade || '-']
+        ];
+        infoCliente.forEach((linha, idx) => {
+            const linhaNum = 7 + idx;
+            ws.getCell(`A${linhaNum}`).value = linha[0];
+            ws.getCell(`A${linhaNum}`).font = FONTES.rotulo;
+            ws.getCell(`A${linhaNum}`).fill = preenchimento(CORES.cinzaClaro);
+            ws.getCell(`A${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'right' };
+            ws.mergeCells(`B${linhaNum}:C${linhaNum}`);
+            ws.getCell(`B${linhaNum}`).value = linha[1];
+            ws.getCell(`B${linhaNum}`).font = FONTES.corpo;
+            ws.getCell(`B${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+            ws.getCell(`D${linhaNum}`).value = linha[2];
+            ws.getCell(`D${linhaNum}`).font = FONTES.rotulo;
+            ws.getCell(`D${linhaNum}`).fill = preenchimento(CORES.cinzaClaro);
+            ws.getCell(`D${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'right' };
+            ws.mergeCells(`E${linhaNum}:F${linhaNum}`);
+            ws.getCell(`E${linhaNum}`).value = linha[3];
+            ws.getCell(`E${linhaNum}`).font = FONTES.corpo;
+            ws.getCell(`E${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+            for (const col of ['A', 'B', 'D', 'E']) {
+                ws.getCell(`${col}${linhaNum}`).border = bordaFina(CORES.cinzaMedio);
+            }
+            ws.getRow(linhaNum).height = 20;
+        });
+
+        // Tabela de itens
+        const linhaSecaoItens = 12;
+        aplicarSubtitulo(ws, linhaSecaoItens, 'ITENS DO ORÇAMENTO', 6);
+
+        const linhaCabecalho = linhaSecaoItens + 1;
+        const cabecalho = ws.getRow(linhaCabecalho);
+        cabecalho.values = ['Código', 'Produto', 'Categoria', 'Quantidade', 'Valor Unitário', 'Valor Total'];
+        aplicarEstiloCabecalho(cabecalho);
+
+        let linhaAtual = linhaCabecalho + 1;
+        (itens || []).forEach((item, idx) => {
+            const row = ws.getRow(linhaAtual);
+            row.values = [
+                item.sku || '-',
+                item.produto_nome || item.nome_customizado || '-',
+                item.categoria || '-',
+                Number(item.quantidade) || 0,
+                Number(item.preco_unitario) || 0,
+                Number(item.subtotal) || 0
+            ];
+            aplicarEstiloLinha(row, {
+                zebrada: idx % 2 === 1,
+                alinhamentos: { 1: 'center', 3: 'center', 4: 'center', 5: 'right', 6: 'right' }
+            });
+            row.getCell(5).numFmt = '"R$" #,##0.00';
+            row.getCell(6).numFmt = '"R$" #,##0.00';
+            linhaAtual += 1;
+        });
+
+        if ((itens || []).length === 0) {
+            const row = ws.getRow(linhaAtual);
+            ws.mergeCells(`A${linhaAtual}:F${linhaAtual}`);
+            row.getCell(1).value = 'Nenhum item cadastrado.';
+            row.getCell(1).font = { ...FONTES.corpo, italic: true };
+            row.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+            row.getCell(1).border = bordaFina(CORES.cinzaMedio);
+            linhaAtual += 1;
+        }
+
+        // Totais
+        linhaAtual += 1;
+        const linhasTotais = [
+            ['Subtotal', subtotal, false],
+            [`Desconto (${descPerc}%)`, -descValor, false],
+            ['TOTAL A PAGAR', total, true]
+        ];
+
+        linhasTotais.forEach(([rotulo, valor, destaque]) => {
+            ws.mergeCells(`A${linhaAtual}:E${linhaAtual}`);
+            const celRotulo = ws.getCell(`A${linhaAtual}`);
+            celRotulo.value = rotulo;
+            celRotulo.alignment = { vertical: 'middle', horizontal: 'right', indent: 1 };
+            celRotulo.border = bordaFina(CORES.cinzaMedio);
+
+            const celValor = ws.getCell(`F${linhaAtual}`);
+            celValor.value = valor;
+            celValor.numFmt = '"R$" #,##0.00';
+            celValor.alignment = { vertical: 'middle', horizontal: 'right' };
+            celValor.border = bordaFina(CORES.cinzaMedio);
+
+            if (destaque) {
+                celRotulo.font = { ...FONTES.total, color: { argb: CORES.branco } };
+                celValor.font = { ...FONTES.total, color: { argb: CORES.branco } };
+                celRotulo.fill = preenchimento(CORES.primaria);
+                celValor.fill = preenchimento(CORES.primaria);
+                ws.getRow(linhaAtual).height = 26;
+            } else {
+                celRotulo.font = FONTES.rotulo;
+                celValor.font = FONTES.corpo;
+                celRotulo.fill = preenchimento(CORES.cinzaClaro);
+                ws.getRow(linhaAtual).height = 20;
+            }
+            linhaAtual += 1;
+        });
+
+        // Forma de pagamento e observações
+        linhaAtual += 1;
+        aplicarSubtitulo(ws, linhaAtual, 'INFORMAÇÕES ADICIONAIS', 6);
+        linhaAtual += 1;
+
+        const infoExtra = [
+            ['Forma de Pagamento', orcamento.forma_pagamento || '-'],
+            ['Observações', (orcamento.observacoes || '-').toString()],
+            ['Status', (orcamento.status || '-').toUpperCase()]
+        ];
+
+        infoExtra.forEach(([rotulo, valor]) => {
+            ws.getCell(`A${linhaAtual}`).value = rotulo;
+            ws.getCell(`A${linhaAtual}`).font = FONTES.rotulo;
+            ws.getCell(`A${linhaAtual}`).fill = preenchimento(CORES.cinzaClaro);
+            ws.getCell(`A${linhaAtual}`).alignment = { vertical: 'middle', horizontal: 'right' };
+            ws.getCell(`A${linhaAtual}`).border = bordaFina(CORES.cinzaMedio);
+            ws.mergeCells(`B${linhaAtual}:F${linhaAtual}`);
+            ws.getCell(`B${linhaAtual}`).value = valor;
+            ws.getCell(`B${linhaAtual}`).font = FONTES.corpo;
+            ws.getCell(`B${linhaAtual}`).alignment = { vertical: 'middle', horizontal: 'left', indent: 1, wrapText: true };
+            ws.getCell(`B${linhaAtual}`).border = bordaFina(CORES.cinzaMedio);
+            ws.getRow(linhaAtual).height = rotulo === 'Observações' ? 40 : 20;
+            linhaAtual += 1;
+        });
+
+        // Rodapé
+        linhaAtual += 1;
+        ws.mergeCells(`A${linhaAtual}:F${linhaAtual}`);
+        const rodape = ws.getCell(`A${linhaAtual}`);
+        rodape.value = `Documento gerado em ${new Date().toLocaleString('pt-BR')}`;
+        rodape.font = { name: 'Segoe UI', size: 9, italic: true, color: { argb: 'FF6B7280' } };
+        rodape.alignment = { vertical: 'middle', horizontal: 'center' };
+
+        ajustarLarguraColunas(ws, { min: 12, max: 55, padding: 3 });
+
+        const nomeArquivo = formatarNomeArquivo(`orcamento-${orcamento.numero || orcamento.id}`, 'xlsx');
+        await enviarXLSX(res, workbook, nomeArquivo);
+    } catch (erro) {
+        res.status(500).json({ sucesso: false, mensagem: 'Erro ao gerar XLSX do orçamento', erro: erro.message });
     }
 };
 

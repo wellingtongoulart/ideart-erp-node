@@ -31,6 +31,15 @@ router.get('/:id/exportacao', orcamentosController.dadosExportacao);
 
 /**
  * @openapi
+ * /api/orcamentos/{id}/exportar-xlsx:
+ *   get:
+ *     tags: [Orcamentos]
+ *     summary: Gera e retorna o arquivo XLSX estilizado do orçamento
+ */
+router.get('/:id/exportar-xlsx', orcamentosController.exportarXLSX);
+
+/**
+ * @openapi
  * /api/orcamentos:
  *   post:
  *     tags: [Orcamentos]
