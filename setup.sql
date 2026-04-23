@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS produtos (
     ativo BOOLEAN DEFAULT TRUE,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_produtos_sku_fornecedor (sku, fornecedor)
+    UNIQUE KEY uk_produtos_sku (sku)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS orcamentos (
@@ -280,18 +280,25 @@ SET @sql := IF(@existe = 0,
     'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- 3.2 produtos — trocar UNIQUE sku (global) por UNIQUE (sku, fornecedor)
-SET @uk_antigo := (SELECT COUNT(*) FROM information_schema.STATISTICS
+-- 3.2 produtos — garantir UNIQUE apenas em sku (descartar índices antigos se existirem)
+SET @uk_legado := (SELECT COUNT(*) FROM information_schema.STATISTICS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'produtos' AND INDEX_NAME = 'sku');
-SET @sql := IF(@uk_antigo > 0,
+SET @sql := IF(@uk_legado > 0,
     'ALTER TABLE produtos DROP INDEX sku',
     'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-SET @uk_novo := (SELECT COUNT(*) FROM information_schema.STATISTICS
+SET @uk_composto := (SELECT COUNT(*) FROM information_schema.STATISTICS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'produtos' AND INDEX_NAME = 'uk_produtos_sku_fornecedor');
+SET @sql := IF(@uk_composto > 0,
+    'ALTER TABLE produtos DROP INDEX uk_produtos_sku_fornecedor',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @uk_novo := (SELECT COUNT(*) FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'produtos' AND INDEX_NAME = 'uk_produtos_sku');
 SET @sql := IF(@uk_novo = 0,
-    'ALTER TABLE produtos ADD UNIQUE KEY uk_produtos_sku_fornecedor (sku, fornecedor)',
+    'ALTER TABLE produtos ADD UNIQUE KEY uk_produtos_sku (sku)',
     'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 

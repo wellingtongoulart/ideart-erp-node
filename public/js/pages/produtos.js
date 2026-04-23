@@ -132,6 +132,8 @@ export function inicializarProdutos() {
         ],
         colunas: [
             { chave: 'id', rotulo: 'ID', ordenavel: true, largura: '70px' },
+            { chave: 'sku', rotulo: 'SKU', ordenavel: true,
+              formatar: (p) => p.sku || '-' },
             { chave: 'nome', rotulo: 'Nome', ordenavel: true },
             { chave: 'categoria', rotulo: 'Categoria', ordenavel: true,
               formatar: (p) => p.categoria || '-' },

@@ -172,18 +172,18 @@ exports.criar = async (req, res) => {
 
         const connection = await pool.getConnection();
 
-        // Verificar se SKU já existe para este fornecedor (unicidade é por par sku+fornecedor)
+        // Verificar se SKU já existe (unicidade global)
         if (sku) {
             const [existente] = await connection.execute(
-                'SELECT id FROM produtos WHERE sku = ? AND fornecedor <=> ?',
-                [sku, fornecedor || null]
+                'SELECT id FROM produtos WHERE sku = ?',
+                [sku]
             );
 
             if (existente.length > 0) {
                 connection.release();
                 return res.status(400).json({
                     sucesso: false,
-                    mensagem: 'Este SKU já está cadastrado para este fornecedor'
+                    mensagem: 'Este SKU já está cadastrado'
                 });
             }
         }
@@ -237,6 +237,22 @@ exports.atualizar = async (req, res) => {
                 sucesso: false,
                 mensagem: 'Produto não encontrado'
             });
+        }
+
+        // Verificar se novo SKU já está em uso por outro produto (unicidade global)
+        if (sku !== undefined && sku !== null && sku !== '') {
+            const [conflito] = await connection.execute(
+                'SELECT id FROM produtos WHERE sku = ? AND id <> ?',
+                [sku, id]
+            );
+
+            if (conflito.length > 0) {
+                connection.release();
+                return res.status(400).json({
+                    sucesso: false,
+                    mensagem: 'Este SKU já está cadastrado em outro produto'
+                });
+            }
         }
 
         // Montar query dinâmica
