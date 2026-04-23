@@ -1,7 +1,109 @@
 // Controller de Orçamentos
 const ExcelJS = require('exceljs');
+const fs = require('fs');
+const path = require('path');
 const pool = require('../config/database');
 const { montarOrderBy } = require('../utils/ordenacao');
+
+const CAMINHO_LOGO = path.join(__dirname, '..', '..', 'public', 'images', 'ideart-logo.png');
+
+// pngjs é opcional: se estiver instalado, a logo é recortada removendo as
+// bordas transparentes; se não, o PNG original é usado como está.
+let PNG = null;
+try {
+    PNG = require('pngjs').PNG;
+    console.log('[logo] pngjs carregado — recorte de bordas transparentes ATIVO');
+} catch (_) {
+    console.warn('[logo] pngjs NÃO instalado — logo será usada sem recorte. Rode: npm install');
+}
+
+// Lê largura/altura de um PNG parseando o chunk IHDR (assinatura + header).
+function lerDimensoesPng(buffer) {
+    if (!buffer || buffer.length < 24) return null;
+    const sig = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    for (let i = 0; i < sig.length; i++) {
+        if (buffer[i] !== sig[i]) return null;
+    }
+    return {
+        width: buffer.readUInt32BE(16),
+        height: buffer.readUInt32BE(20)
+    };
+}
+
+// Dado um retângulo máximo e a proporção real da imagem, devolve o tamanho
+// (em pixels de tela) que cabe dentro do retângulo sem deformar.
+function encaixarProporcional(larguraMax, alturaMax, larguraReal, alturaReal) {
+    if (!larguraReal || !alturaReal) return { width: larguraMax, height: alturaMax };
+    const escala = Math.min(larguraMax / larguraReal, alturaMax / alturaReal);
+    return {
+        width: Math.round(larguraReal * escala),
+        height: Math.round(alturaReal * escala)
+    };
+}
+
+// Remove as bordas transparentes de um PNG, retornando um novo buffer.
+// Considera "transparente" qualquer pixel com alpha <= threshold.
+// Se pngjs não estiver instalado, devolve o buffer original inalterado.
+function recortarTransparencia(bufferPng, alphaMin = 8) {
+    if (!PNG) return bufferPng;
+    try {
+        const png = PNG.sync.read(bufferPng);
+        const { width, height, data } = png;
+
+        let top = height, bottom = -1, left = width, right = -1;
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const alpha = data[(y * width + x) * 4 + 3];
+                if (alpha > alphaMin) {
+                    if (y < top) top = y;
+                    if (y > bottom) bottom = y;
+                    if (x < left) left = x;
+                    if (x > right) right = x;
+                }
+            }
+        }
+
+        // Sem pixels visíveis ou crop é o próprio tamanho: devolve original.
+        if (bottom < top || right < left) {
+            console.warn('[logo] Nenhum pixel opaco encontrado — crop ignorado');
+            return bufferPng;
+        }
+        const novoW = right - left + 1;
+        const novoH = bottom - top + 1;
+        console.log(`[logo] crop: ${width}x${height} -> ${novoW}x${novoH} (removido top=${top} bottom=${height - 1 - bottom} left=${left} right=${width - 1 - right})`);
+        if (novoW === width && novoH === height) return bufferPng;
+
+        const recortado = new PNG({ width: novoW, height: novoH });
+        for (let y = 0; y < novoH; y++) {
+            for (let x = 0; x < novoW; x++) {
+                const srcIdx = ((y + top) * width + (x + left)) * 4;
+                const dstIdx = (y * novoW + x) * 4;
+                recortado.data[dstIdx]     = data[srcIdx];
+                recortado.data[dstIdx + 1] = data[srcIdx + 1];
+                recortado.data[dstIdx + 2] = data[srcIdx + 2];
+                recortado.data[dstIdx + 3] = data[srcIdx + 3];
+            }
+        }
+        return PNG.sync.write(recortado);
+    } catch (_) {
+        return bufferPng;
+    }
+}
+
+// Cache do PNG recortado para não reprocessar a cada export. Invalida quando
+// o arquivo é alterado (mtime).
+let _cacheLogo = { mtime: null, buffer: null };
+function obterBufferLogo() {
+    if (!fs.existsSync(CAMINHO_LOGO)) return null;
+    const stat = fs.statSync(CAMINHO_LOGO);
+    if (_cacheLogo.buffer && _cacheLogo.mtime === stat.mtimeMs) {
+        return _cacheLogo.buffer;
+    }
+    const original = fs.readFileSync(CAMINHO_LOGO);
+    const recortado = recortarTransparencia(original);
+    _cacheLogo = { mtime: stat.mtimeMs, buffer: recortado };
+    return recortado;
+}
 const {
     CORES,
     FONTES,
@@ -36,8 +138,14 @@ function gerarNumeroPedido() {
 }
 
 async function carregarItensOrcamento(connection, orcamentoId) {
+    // `sku` exposto ao cliente: prioriza o código customizado (itens avulsos)
+    // e cai no SKU do produto cadastrado quando o customizado não existir.
     const [itens] = await connection.execute(
-        `SELECT oi.*, p.nome AS produto_nome, p.sku, p.categoria, p.descricao AS produto_descricao
+        `SELECT oi.*,
+                p.nome AS produto_nome,
+                COALESCE(NULLIF(oi.codigo_customizado, ''), p.sku) AS sku,
+                p.categoria,
+                p.descricao AS produto_descricao
          FROM orcamento_itens oi
          LEFT JOIN produtos p ON oi.produto_id = p.id
          WHERE oi.orcamento_id = ?
@@ -45,6 +153,12 @@ async function carregarItensOrcamento(connection, orcamentoId) {
         [orcamentoId]
     );
     return itens;
+}
+
+function normalizarTextoOpcional(valor) {
+    if (valor === undefined || valor === null) return null;
+    const texto = String(valor).trim();
+    return texto.length === 0 ? null : texto;
 }
 
 async function substituirItensOrcamento(connection, orcamentoId, itens) {
@@ -60,13 +174,18 @@ async function substituirItensOrcamento(connection, orcamentoId, itens) {
 
         await connection.execute(
             `INSERT INTO orcamento_itens
-             (orcamento_id, produto_id, nome_customizado, descricao_customizada, quantidade, preco_unitario, subtotal, ordem, criado_em)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+             (orcamento_id, ambiente, produto_id, nome_customizado, codigo_customizado,
+              descricao_customizada, tamanho, cor, quantidade, preco_unitario, subtotal, ordem, criado_em)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
             [
                 orcamentoId,
+                normalizarTextoOpcional(item.ambiente),
                 item.produto_id || null,
-                item.nome_customizado || null,
-                item.descricao_customizada || null,
+                normalizarTextoOpcional(item.nome_customizado),
+                normalizarTextoOpcional(item.codigo_customizado),
+                normalizarTextoOpcional(item.descricao_customizada),
+                normalizarTextoOpcional(item.tamanho),
+                normalizarTextoOpcional(item.cor),
                 quantidade,
                 preco,
                 subtotal,
@@ -384,11 +503,22 @@ exports.aprovar = async (req, res) => {
             const item = itens[i];
             await connection.execute(
                 `INSERT INTO pedido_itens
-                 (pedido_id, produto_id, nome_customizado, descricao_customizada, quantidade, preco_unitario, subtotal, ordem, criado_em)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+                 (pedido_id, ambiente, produto_id, nome_customizado, codigo_customizado,
+                  descricao_customizada, tamanho, cor, quantidade, preco_unitario, subtotal, ordem, criado_em)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
                 [
-                    pedidoId, item.produto_id || null, item.nome_customizado || null, item.descricao_customizada || null,
-                    item.quantidade, item.preco_unitario, item.subtotal, i
+                    pedidoId,
+                    item.ambiente || null,
+                    item.produto_id || null,
+                    item.nome_customizado || null,
+                    item.codigo_customizado || null,
+                    item.descricao_customizada || null,
+                    item.tamanho || null,
+                    item.cor || null,
+                    item.quantidade,
+                    item.preco_unitario,
+                    item.subtotal,
+                    i
                 ]
             );
 
@@ -502,6 +632,16 @@ function formatarDataBR(data) {
     return d.toLocaleDateString('pt-BR');
 }
 
+function agruparItensPorAmbiente(itens) {
+    const grupos = new Map();
+    (itens || []).forEach((item) => {
+        const chave = (item.ambiente && String(item.ambiente).trim()) || 'SEM AMBIENTE';
+        if (!grupos.has(chave)) grupos.set(chave, []);
+        grupos.get(chave).push(item);
+    });
+    return Array.from(grupos.entries()).map(([nome, lista]) => ({ nome, itens: lista }));
+}
+
 // GET - Gera e envia arquivo XLSX estilizado do orçamento
 exports.exportarXLSX = async (req, res) => {
     try {
@@ -553,141 +693,194 @@ exports.exportarXLSX = async (req, res) => {
         workbook.created = new Date();
 
         const ws = workbook.addWorksheet('Orçamento', {
-            pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1 },
+            pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1 },
             views: [{ showGridLines: false }]
         });
 
+        // Colunas: Item | Código | Descrição | Cor | Tamanho | Qtd | Vl. Unit | Vl. Total
         ws.columns = [
-            { key: 'codigo', width: 12 },
-            { key: 'produto', width: 38 },
-            { key: 'categoria', width: 18 },
-            { key: 'quantidade', width: 12 },
-            { key: 'unitario', width: 16 },
+            { key: 'item', width: 8 },
+            { key: 'codigo', width: 22 },
+            { key: 'descricao', width: 42 },
+            { key: 'cor', width: 12 },
+            { key: 'tamanho', width: 14 },
+            { key: 'qtd', width: 8 },
+            { key: 'unitario', width: 14 },
             { key: 'total', width: 16 }
         ];
 
-        // Título
-        aplicarTituloPrincipal(ws, `ORÇAMENTO Nº ${orcamento.numero || orcamento.id}`, 6);
+        const totalColunas = 8;
+        // Bloco topo (linhas 1-4): logo à esquerda (A:C), título ORÇAMENTO centralizado (D:F),
+        // caixa do número à direita (G:H) — todos na mesma altura, batendo com o layout do PDF.
+        ws.mergeCells('A1:C4');
 
-        // Dados da empresa
-        aplicarSubtitulo(ws, 2, 'DADOS DA EMPRESA', 6);
-        const infoEmpresa = [
-            ['Empresa', empresa.nome_fantasia || '-', 'Telefone', empresa.telefone || '-'],
-            ['E-mail', empresa.email || '-', 'Endereço', [empresa.endereco, empresa.cidade, empresa.estado].filter(Boolean).join(' - ') || '-']
-        ];
-        infoEmpresa.forEach((linha, idx) => {
-            const linhaNum = 3 + idx;
-            ws.getCell(`A${linhaNum}`).value = linha[0];
-            ws.getCell(`A${linhaNum}`).font = FONTES.rotulo;
-            ws.getCell(`A${linhaNum}`).fill = preenchimento(CORES.cinzaClaro);
-            ws.getCell(`A${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'right' };
-            ws.mergeCells(`B${linhaNum}:C${linhaNum}`);
-            ws.getCell(`B${linhaNum}`).value = linha[1];
-            ws.getCell(`B${linhaNum}`).font = FONTES.corpo;
-            ws.getCell(`B${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-            ws.getCell(`D${linhaNum}`).value = linha[2];
-            ws.getCell(`D${linhaNum}`).font = FONTES.rotulo;
-            ws.getCell(`D${linhaNum}`).fill = preenchimento(CORES.cinzaClaro);
-            ws.getCell(`D${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'right' };
-            ws.mergeCells(`E${linhaNum}:F${linhaNum}`);
-            ws.getCell(`E${linhaNum}`).value = linha[3];
-            ws.getCell(`E${linhaNum}`).font = FONTES.corpo;
-            ws.getCell(`E${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        ws.mergeCells('D1:F4');
+        ws.getCell('D1').value = 'ORÇAMENTO';
+        ws.getCell('D1').font = { name: 'Segoe UI', size: 26, bold: true, color: { argb: CORES.primaria } };
+        ws.getCell('D1').alignment = { vertical: 'middle', horizontal: 'center' };
 
-            for (const col of ['A', 'B', 'D', 'E']) {
-                ws.getCell(`${col}${linhaNum}`).border = bordaFina(CORES.cinzaMedio);
+        // Altura uniforme nas 4 linhas do topo
+        for (let r = 1; r <= 4; r++) ws.getRow(r).height = 22;
+
+        // Insere logo se o arquivo existir; silenciosamente pula caso contrário
+        try {
+            const bufferLogo = obterBufferLogo();
+            if (bufferLogo) {
+                const logoId = workbook.addImage({ buffer: bufferLogo, extension: 'png' });
+
+                // Limites da caixa onde a logo pode aparecer (em px de tela).
+                // A escala é proporcional para evitar deformação.
+                const LOGO_MAX_WIDTH = 260;
+                const LOGO_MAX_HEIGHT = 110;
+
+                const dims = lerDimensoesPng(bufferLogo);
+                const ext = encaixarProporcional(
+                    LOGO_MAX_WIDTH, LOGO_MAX_HEIGHT,
+                    dims ? dims.width : LOGO_MAX_WIDTH,
+                    dims ? dims.height : LOGO_MAX_HEIGHT
+                );
+
+                ws.addImage(logoId, {
+                    tl: { col: 0.1, row: 0.1 },
+                    ext
+                });
+            } else {
+                ws.getCell('A1').value = (empresa.nome_fantasia || 'IDEART').toUpperCase();
+                ws.getCell('A1').font = { name: 'Segoe UI', size: 20, bold: true, color: { argb: CORES.primaria } };
+                ws.getCell('A1').alignment = { vertical: 'middle', horizontal: 'center' };
             }
-            ws.getRow(linhaNum).height = 20;
-        });
+        } catch (_) { /* continua sem logo */ }
 
-        // Dados do cliente
-        aplicarSubtitulo(ws, 6, 'DADOS DO CLIENTE', 6);
+        // Caixa "ORÇAMENTO Nº" alinhada com a logo (linhas 1-2 label, 3-4 número)
+        ws.mergeCells('G1:H2');
+        ws.getCell('G1').value = 'ORÇAMENTO Nº';
+        ws.getCell('G1').font = { ...FONTES.rotulo, color: { argb: CORES.branco } };
+        ws.getCell('G1').fill = preenchimento(CORES.primaria);
+        ws.getCell('G1').alignment = { vertical: 'middle', horizontal: 'center' };
+        ws.getCell('G1').border = bordaFina();
+
+        ws.mergeCells('G3:H4');
+        ws.getCell('G3').value = orcamento.numero || `#${orcamento.id}`;
+        ws.getCell('G3').font = { name: 'Segoe UI', size: 13, bold: true, color: { argb: CORES.primaria } };
+        ws.getCell('G3').alignment = { vertical: 'middle', horizontal: 'center' };
+        ws.getCell('G3').border = bordaFina();
+
+        // Linhas 5-6: dados da empresa em faixa compacta abaixo do topo
+        ws.getCell('A5').value = 'CNPJ:';
+        ws.getCell('A5').font = FONTES.rotulo;
+        ws.getCell('B5').value = empresa.cnpj || '-';
+        ws.getCell('B5').font = FONTES.corpo;
+
+        ws.getCell('A6').value = 'TELEFONE:';
+        ws.getCell('A6').font = FONTES.rotulo;
+        ws.getCell('B6').value = empresa.telefone || '-';
+        ws.getCell('B6').font = FONTES.corpo;
+
+        ws.getCell('D5').value = 'E-MAIL:';
+        ws.getCell('D5').font = FONTES.rotulo;
+        ws.mergeCells('E5:H5');
+        ws.getCell('E5').value = empresa.email || '-';
+        ws.getCell('E5').font = FONTES.corpo;
+
+        ws.getCell('D6').value = 'DATA:';
+        ws.getCell('D6').font = FONTES.rotulo;
+        ws.mergeCells('E6:H6');
+        ws.getCell('E6').value = formatarDataBR(orcamento.data_criacao);
+        ws.getCell('E6').font = FONTES.corpo;
+
+        // Bloco dados do cliente
+        aplicarSubtitulo(ws, 8, 'DADOS DO CLIENTE', totalColunas);
         const infoCliente = [
-            ['Cliente', orcamento.cliente_nome || '-', 'Data', formatarDataBR(orcamento.data_criacao)],
-            ['E-mail', orcamento.cliente_email || '-', 'Validade', formatarDataBR(orcamento.data_validade)],
-            ['Telefone', orcamento.cliente_telefone || '-', 'Cidade/Estado', [orcamento.cliente_cidade, orcamento.cliente_estado].filter(Boolean).join(' / ') || '-'],
-            ['Profissional', orcamento.profissional_nome || '-', 'Especialidade', orcamento.profissional_especialidade || '-']
+            ['CLIENTE:', orcamento.cliente_nome || '-'],
+            ['ENDEREÇO:', [orcamento.cliente_endereco, orcamento.cliente_cidade, orcamento.cliente_estado].filter(Boolean).join(', ') || '-'],
+            ['TELEFONE:', orcamento.cliente_telefone || '-'],
+            ['E-MAIL:', orcamento.cliente_email || '-']
         ];
         infoCliente.forEach((linha, idx) => {
-            const linhaNum = 7 + idx;
+            const linhaNum = 9 + idx;
             ws.getCell(`A${linhaNum}`).value = linha[0];
             ws.getCell(`A${linhaNum}`).font = FONTES.rotulo;
             ws.getCell(`A${linhaNum}`).fill = preenchimento(CORES.cinzaClaro);
             ws.getCell(`A${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'right' };
-            ws.mergeCells(`B${linhaNum}:C${linhaNum}`);
+            ws.getCell(`A${linhaNum}`).border = bordaFina(CORES.cinzaMedio);
+            ws.mergeCells(`B${linhaNum}:H${linhaNum}`);
             ws.getCell(`B${linhaNum}`).value = linha[1];
             ws.getCell(`B${linhaNum}`).font = FONTES.corpo;
             ws.getCell(`B${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-            ws.getCell(`D${linhaNum}`).value = linha[2];
-            ws.getCell(`D${linhaNum}`).font = FONTES.rotulo;
-            ws.getCell(`D${linhaNum}`).fill = preenchimento(CORES.cinzaClaro);
-            ws.getCell(`D${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'right' };
-            ws.mergeCells(`E${linhaNum}:F${linhaNum}`);
-            ws.getCell(`E${linhaNum}`).value = linha[3];
-            ws.getCell(`E${linhaNum}`).font = FONTES.corpo;
-            ws.getCell(`E${linhaNum}`).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-
-            for (const col of ['A', 'B', 'D', 'E']) {
-                ws.getCell(`${col}${linhaNum}`).border = bordaFina(CORES.cinzaMedio);
-            }
+            ws.getCell(`B${linhaNum}`).border = bordaFina(CORES.cinzaMedio);
             ws.getRow(linhaNum).height = 20;
         });
 
-        // Tabela de itens
-        const linhaSecaoItens = 12;
-        aplicarSubtitulo(ws, linhaSecaoItens, 'ITENS DO ORÇAMENTO', 6);
-
-        const linhaCabecalho = linhaSecaoItens + 1;
+        // Cabeçalho da tabela de itens
+        const linhaCabecalho = 14;
         const cabecalho = ws.getRow(linhaCabecalho);
-        cabecalho.values = ['Código', 'Produto', 'Categoria', 'Quantidade', 'Valor Unitário', 'Valor Total'];
+        cabecalho.values = ['ITEM', 'CÓDIGO', 'DESCRIÇÃO DO PRODUTO', 'COR', 'TAMANHO', 'QTD.', 'VL. UNIT.', 'VL. TOTAL'];
         aplicarEstiloCabecalho(cabecalho);
 
         let linhaAtual = linhaCabecalho + 1;
-        (itens || []).forEach((item, idx) => {
-            const row = ws.getRow(linhaAtual);
-            row.values = [
-                item.sku || '-',
-                item.produto_nome || item.nome_customizado || '-',
-                item.categoria || '-',
-                Number(item.quantidade) || 0,
-                Number(item.preco_unitario) || 0,
-                Number(item.subtotal) || 0
-            ];
-            aplicarEstiloLinha(row, {
-                zebrada: idx % 2 === 1,
-                alinhamentos: { 1: 'center', 3: 'center', 4: 'center', 5: 'right', 6: 'right' }
-            });
-            row.getCell(5).numFmt = '"R$" #,##0.00';
-            row.getCell(6).numFmt = '"R$" #,##0.00';
-            linhaAtual += 1;
-        });
+        let numeroItem = 1;
+        const grupos = agruparItensPorAmbiente(itens);
 
-        if ((itens || []).length === 0) {
-            const row = ws.getRow(linhaAtual);
-            ws.mergeCells(`A${linhaAtual}:F${linhaAtual}`);
-            row.getCell(1).value = 'Nenhum item cadastrado.';
-            row.getCell(1).font = { ...FONTES.corpo, italic: true };
-            row.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
-            row.getCell(1).border = bordaFina(CORES.cinzaMedio);
+        if (grupos.length === 0) {
+            ws.mergeCells(`A${linhaAtual}:H${linhaAtual}`);
+            const cel = ws.getCell(`A${linhaAtual}`);
+            cel.value = 'Nenhum item cadastrado.';
+            cel.font = { ...FONTES.corpo, italic: true };
+            cel.alignment = { vertical: 'middle', horizontal: 'center' };
+            cel.border = bordaFina(CORES.cinzaMedio);
             linhaAtual += 1;
         }
+
+        grupos.forEach((grupo) => {
+            // Linha de seção do ambiente (fundo escuro, banner em toda a largura)
+            ws.mergeCells(`A${linhaAtual}:H${linhaAtual}`);
+            const celAmbiente = ws.getCell(`A${linhaAtual}`);
+            celAmbiente.value = (grupo.nome || '').toString().toUpperCase();
+            celAmbiente.font = { name: 'Segoe UI', size: 11, bold: true, color: { argb: CORES.branco } };
+            celAmbiente.fill = preenchimento(CORES.primaria);
+            celAmbiente.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+            celAmbiente.border = bordaFina();
+            ws.getRow(linhaAtual).height = 20;
+            linhaAtual += 1;
+
+            grupo.itens.forEach((item, idx) => {
+                const row = ws.getRow(linhaAtual);
+                row.values = [
+                    numeroItem++,
+                    item.sku || '-',
+                    item.produto_nome || item.nome_customizado || '-',
+                    item.cor || '',
+                    item.tamanho || '',
+                    Number(item.quantidade) || 0,
+                    Number(item.preco_unitario) || 0,
+                    Number(item.subtotal) || 0
+                ];
+                aplicarEstiloLinha(row, {
+                    zebrada: idx % 2 === 1,
+                    alinhamentos: { 1: 'center', 2: 'center', 4: 'center', 5: 'center', 6: 'center', 7: 'right', 8: 'right' }
+                });
+                row.getCell(7).numFmt = '"R$" #,##0.00';
+                row.getCell(8).numFmt = '"R$" #,##0.00';
+                linhaAtual += 1;
+            });
+        });
 
         // Totais
         linhaAtual += 1;
         const linhasTotais = [
-            ['Subtotal', subtotal, false],
-            [`Desconto (${descPerc}%)`, -descValor, false],
-            ['TOTAL A PAGAR', total, true]
+            ['TOTAL DOS AMBIENTES:', subtotal, false],
+            [`DESCONTO (${descPerc}%):`, -descValor, false],
+            ['ORÇAMENTO FINAL:', total, true]
         ];
 
         linhasTotais.forEach(([rotulo, valor, destaque]) => {
-            ws.mergeCells(`A${linhaAtual}:E${linhaAtual}`);
+            ws.mergeCells(`A${linhaAtual}:G${linhaAtual}`);
             const celRotulo = ws.getCell(`A${linhaAtual}`);
             celRotulo.value = rotulo;
             celRotulo.alignment = { vertical: 'middle', horizontal: 'right', indent: 1 };
             celRotulo.border = bordaFina(CORES.cinzaMedio);
 
-            const celValor = ws.getCell(`F${linhaAtual}`);
+            const celValor = ws.getCell(`H${linhaAtual}`);
             celValor.value = valor;
             celValor.numFmt = '"R$" #,##0.00';
             celValor.alignment = { vertical: 'middle', horizontal: 'right' };
@@ -708,13 +901,14 @@ exports.exportarXLSX = async (req, res) => {
             linhaAtual += 1;
         });
 
-        // Forma de pagamento e observações
+        // Informações adicionais
         linhaAtual += 1;
-        aplicarSubtitulo(ws, linhaAtual, 'INFORMAÇÕES ADICIONAIS', 6);
+        aplicarSubtitulo(ws, linhaAtual, 'INFORMAÇÕES ADICIONAIS', totalColunas);
         linhaAtual += 1;
 
         const infoExtra = [
             ['Forma de Pagamento', orcamento.forma_pagamento || '-'],
+            ['Validade', formatarDataBR(orcamento.data_validade)],
             ['Observações', (orcamento.observacoes || '-').toString()],
             ['Status', (orcamento.status || '-').toUpperCase()]
         ];
@@ -725,7 +919,7 @@ exports.exportarXLSX = async (req, res) => {
             ws.getCell(`A${linhaAtual}`).fill = preenchimento(CORES.cinzaClaro);
             ws.getCell(`A${linhaAtual}`).alignment = { vertical: 'middle', horizontal: 'right' };
             ws.getCell(`A${linhaAtual}`).border = bordaFina(CORES.cinzaMedio);
-            ws.mergeCells(`B${linhaAtual}:F${linhaAtual}`);
+            ws.mergeCells(`B${linhaAtual}:H${linhaAtual}`);
             ws.getCell(`B${linhaAtual}`).value = valor;
             ws.getCell(`B${linhaAtual}`).font = FONTES.corpo;
             ws.getCell(`B${linhaAtual}`).alignment = { vertical: 'middle', horizontal: 'left', indent: 1, wrapText: true };
@@ -736,13 +930,11 @@ exports.exportarXLSX = async (req, res) => {
 
         // Rodapé
         linhaAtual += 1;
-        ws.mergeCells(`A${linhaAtual}:F${linhaAtual}`);
+        ws.mergeCells(`A${linhaAtual}:H${linhaAtual}`);
         const rodape = ws.getCell(`A${linhaAtual}`);
         rodape.value = `Documento gerado em ${new Date().toLocaleString('pt-BR')}`;
         rodape.font = { name: 'Segoe UI', size: 9, italic: true, color: { argb: 'FF6B7280' } };
         rodape.alignment = { vertical: 'middle', horizontal: 'center' };
-
-        ajustarLarguraColunas(ws, { min: 12, max: 55, padding: 3 });
 
         const nomeArquivo = formatarNomeArquivo(`orcamento-${orcamento.numero || orcamento.id}`, 'xlsx');
         await enviarXLSX(res, workbook, nomeArquivo);

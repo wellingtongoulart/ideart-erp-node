@@ -88,9 +88,13 @@ CREATE TABLE IF NOT EXISTS orcamentos (
 CREATE TABLE IF NOT EXISTS orcamento_itens (
     id INT PRIMARY KEY AUTO_INCREMENT,
     orcamento_id INT NOT NULL,
+    ambiente VARCHAR(100) NULL,
     produto_id INT NULL,
     nome_customizado VARCHAR(255) NULL,
+    codigo_customizado VARCHAR(100) NULL,
     descricao_customizada TEXT NULL,
+    tamanho VARCHAR(100) NULL,
+    cor VARCHAR(100) NULL,
     quantidade INT,
     preco_unitario DECIMAL(10, 2),
     subtotal DECIMAL(12, 2),
@@ -121,9 +125,13 @@ CREATE TABLE IF NOT EXISTS pedidos (
 CREATE TABLE IF NOT EXISTS pedido_itens (
     id INT PRIMARY KEY AUTO_INCREMENT,
     pedido_id INT NOT NULL,
+    ambiente VARCHAR(100) NULL,
     produto_id INT NULL,
     nome_customizado VARCHAR(255) NULL,
+    codigo_customizado VARCHAR(100) NULL,
     descricao_customizada TEXT NULL,
+    tamanho VARCHAR(100) NULL,
+    cor VARCHAR(100) NULL,
     quantidade INT,
     preco_unitario DECIMAL(10, 2),
     subtotal DECIMAL(12, 2),
@@ -344,6 +352,35 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 ALTER TABLE orcamento_itens MODIFY COLUMN produto_id INT NULL;
 
+-- 3.5.1 orcamento_itens — ambiente / tamanho / cor / codigo_customizado (opcionais; aparecem no PDF/Excel)
+SET @existe := (SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orcamento_itens' AND COLUMN_NAME = 'ambiente');
+SET @sql := IF(@existe = 0,
+    'ALTER TABLE orcamento_itens ADD COLUMN ambiente VARCHAR(100) NULL AFTER orcamento_id',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @existe := (SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orcamento_itens' AND COLUMN_NAME = 'codigo_customizado');
+SET @sql := IF(@existe = 0,
+    'ALTER TABLE orcamento_itens ADD COLUMN codigo_customizado VARCHAR(100) NULL AFTER nome_customizado',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @existe := (SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orcamento_itens' AND COLUMN_NAME = 'tamanho');
+SET @sql := IF(@existe = 0,
+    'ALTER TABLE orcamento_itens ADD COLUMN tamanho VARCHAR(100) NULL AFTER descricao_customizada',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @existe := (SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orcamento_itens' AND COLUMN_NAME = 'cor');
+SET @sql := IF(@existe = 0,
+    'ALTER TABLE orcamento_itens ADD COLUMN cor VARCHAR(100) NULL AFTER tamanho',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- 3.6 pedidos — colunas novas
 SET @existe := (SELECT COUNT(*) FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pedidos' AND COLUMN_NAME = 'orcamento_id');
@@ -382,6 +419,35 @@ SET @sql := IF(@existe = 0,
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 ALTER TABLE pedido_itens MODIFY COLUMN produto_id INT NULL;
+
+-- 3.7.1 pedido_itens — ambiente / tamanho / cor / codigo_customizado (replicados do orçamento de origem)
+SET @existe := (SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pedido_itens' AND COLUMN_NAME = 'ambiente');
+SET @sql := IF(@existe = 0,
+    'ALTER TABLE pedido_itens ADD COLUMN ambiente VARCHAR(100) NULL AFTER pedido_id',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @existe := (SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pedido_itens' AND COLUMN_NAME = 'codigo_customizado');
+SET @sql := IF(@existe = 0,
+    'ALTER TABLE pedido_itens ADD COLUMN codigo_customizado VARCHAR(100) NULL AFTER nome_customizado',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @existe := (SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pedido_itens' AND COLUMN_NAME = 'tamanho');
+SET @sql := IF(@existe = 0,
+    'ALTER TABLE pedido_itens ADD COLUMN tamanho VARCHAR(100) NULL AFTER descricao_customizada',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @existe := (SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pedido_itens' AND COLUMN_NAME = 'cor');
+SET @sql := IF(@existe = 0,
+    'ALTER TABLE pedido_itens ADD COLUMN cor VARCHAR(100) NULL AFTER tamanho',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- =====================================================================
 -- 4. ÍNDICES (idempotentes)
