@@ -141,7 +141,11 @@ exports.buscarPorId = async (req, res) => {
         const pedido = pedidos[0];
 
         const [itens] = await connection.execute(
-            `SELECT pi.*, pr.nome AS produto_nome, pr.sku, pr.categoria, pr.descricao AS produto_descricao
+            `SELECT pi.*,
+                    pr.nome AS produto_nome,
+                    COALESCE(NULLIF(pi.codigo_customizado, ''), pr.sku) AS sku,
+                    pr.categoria,
+                    pr.descricao AS produto_descricao
              FROM pedido_itens pi
              LEFT JOIN produtos pr ON pi.produto_id = pr.id
              WHERE pi.pedido_id = ?
@@ -233,9 +237,23 @@ exports.criar = async (req, res) => {
 
                 await connection.execute(
                     `INSERT INTO pedido_itens
-                     (pedido_id, produto_id, nome_customizado, descricao_customizada, quantidade, preco_unitario, subtotal, ordem, criado_em)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-                    [pedido_id, item.produto_id || null, item.nome_customizado || null, item.descricao_customizada || null, qtd, preco, subtotal, i]
+                     (pedido_id, ambiente, produto_id, nome_customizado, codigo_customizado,
+                      descricao_customizada, tamanho, cor, quantidade, preco_unitario, subtotal, ordem, criado_em)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+                    [
+                        pedido_id,
+                        item.ambiente || null,
+                        item.produto_id || null,
+                        item.nome_customizado || null,
+                        item.codigo_customizado || null,
+                        item.descricao_customizada || null,
+                        item.tamanho || null,
+                        item.cor || null,
+                        qtd,
+                        preco,
+                        subtotal,
+                        i
+                    ]
                 );
 
                 if (item.produto_id) {

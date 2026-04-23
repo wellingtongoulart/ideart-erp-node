@@ -76,7 +76,17 @@ export const orcamentosPage = {
                 </div>
 
                 <!-- Produtos -->
-                <h3 class="section-title">Produtos/Serviços</h3>
+                <h3 class="section-title">Produtos/Serviços por Ambiente</h3>
+
+                <div class="form-row orc-ambiente-row-topo">
+                    <div class="form-group">
+                        <label for="orcAmbienteAtual">Ambiente atual (novos itens vão para este ambiente)</label>
+                        <input type="text" id="orcAmbienteAtual" list="orcAmbientesList"
+                               placeholder="Ex: Sala, Cozinha, Suíte Master..." autocomplete="off" />
+                        <datalist id="orcAmbientesList"></datalist>
+                    </div>
+                </div>
+
                 <div class="btn-group" style="margin-bottom: 0.75rem;">
                     <button class="btn btn-primary btn-small" id="orcAddProdutoCadBtn">
                         <i class="fas fa-plus"></i> Incluir produto cadastrado
@@ -91,13 +101,13 @@ export const orcamentosPage = {
                         <thead>
                             <tr>
                                 <th style="width:70px;">Ordem</th>
-                                <th>SKU</th>
+                                <th style="width:110px;">Código</th>
                                 <th>Nome</th>
-                                <th>Categoria</th>
-                                <th>Fornecedor</th>
-                                <th style="width:90px;">Qtd</th>
-                                <th>Valor unit.</th>
-                                <th>Valor total</th>
+                                <th style="width:110px;">Cor</th>
+                                <th style="width:110px;">Tamanho</th>
+                                <th style="width:80px;">Qtd</th>
+                                <th style="width:120px;">Valor unit.</th>
+                                <th style="width:110px;">Valor total</th>
                                 <th style="width:60px;"></th>
                             </tr>
                         </thead>
@@ -209,12 +219,26 @@ export const orcamentosPage = {
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
+                        <label>Código</label>
+                        <input type="text" id="orcCustomCodigo" placeholder="SKU ou código interno (opcional)" />
+                    </div>
+                    <div class="form-group">
                         <label>Nome *</label>
                         <input type="text" id="orcCustomNome" />
                     </div>
                     <div class="form-group">
                         <label>Descrição</label>
                         <textarea id="orcCustomDescricao" rows="2"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Cor</label>
+                            <input type="text" id="orcCustomCor" placeholder="Opcional" />
+                        </div>
+                        <div class="form-group">
+                            <label>Tamanho</label>
+                            <input type="text" id="orcCustomTamanho" placeholder="Opcional" />
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -273,13 +297,45 @@ function calcularTotalComDesconto(registro) {
 const orcState = {
     modoEdicao: false,
     editingId: null,
-    itens: [],        // {produto_id|null, nome_customizado, sku, categoria, fornecedor, quantidade, preco_unitario, ...}
+    itens: [],        // {produto_id|null, nome, nome_customizado, sku, ambiente, tamanho, cor, quantidade, preco_unitario, ...}
     originalSnapshot: null,  // snapshot dos dados carregados para detectar alterações
     produtosCache: [],
     clientes: [],
     profissionais: [],
     produtosSelecionados: []  // staging do modal de produtos (antes de inserir no orçamento)
 };
+
+// ====== Utilidades de ambientes ======
+function ambienteAtual() {
+    const el = document.getElementById('orcAmbienteAtual');
+    return el ? (el.value || '').trim() : '';
+}
+
+function listarAmbientes() {
+    const set = new Set();
+    orcState.itens.forEach((it) => {
+        const amb = (it.ambiente || '').trim();
+        if (amb) set.add(amb);
+    });
+    return Array.from(set);
+}
+
+function atualizarDatalistAmbientes() {
+    const dl = document.getElementById('orcAmbientesList');
+    if (!dl) return;
+    const existentes = listarAmbientes();
+    dl.innerHTML = existentes.map((a) => `<option value="${escaparHtml(a)}"></option>`).join('');
+}
+
+function escaparHtml(valor) {
+    if (valor === null || valor === undefined) return '';
+    return String(valor)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 // ====== Inicialização ======
 export function inicializarOrcamentos() {
@@ -463,10 +519,12 @@ export async function editarOrcamento(id) {
             produto_id: it.produto_id,
             nome: it.produto_nome || it.nome_customizado,
             nome_customizado: it.produto_id ? null : it.nome_customizado,
+            codigo_customizado: it.produto_id ? null : (it.codigo_customizado || ''),
             descricao_customizada: it.descricao_customizada,
             sku: it.sku || '-',
-            categoria: it.categoria || '-',
-            fornecedor: '-',
+            ambiente: it.ambiente || '',
+            tamanho: it.tamanho || '',
+            cor: it.cor || '',
             quantidade: Number(it.quantidade) || 1,
             preco_unitario: Number(it.preco_unitario) || 0
         }));
@@ -483,7 +541,8 @@ export async function editarOrcamento(id) {
 
 function limparFormulario() {
     ['orcClienteSelect','orcProfissionalSelect','orcDataEmissao','orcDataValidade',
-     'orcFormaPagamento','orcObservacoes','orcAssinatura','orcClienteEmail','orcClienteTelefone']
+     'orcFormaPagamento','orcObservacoes','orcAssinatura','orcClienteEmail','orcClienteTelefone',
+     'orcAmbienteAtual']
         .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     document.getElementById('orcDesconto').value = 0;
     orcState.itens = [];
@@ -558,54 +617,131 @@ function atualizarCamposCliente() {
     document.getElementById('orcClienteTelefone').value = c ? (c.telefone || '') : '';
 }
 
-// ====== Tabela de itens ======
+// ====== Tabela de itens (agrupada por ambiente) ======
+// Retorna a ordem canônica dos ambientes: primeira ocorrência no array de itens
+// define a ordem. Itens sem ambiente vão para o grupo "(Sem ambiente)".
+function ordemAmbientes() {
+    const vistos = [];
+    orcState.itens.forEach((it) => {
+        const amb = (it.ambiente || '').trim() || '(Sem ambiente)';
+        if (!vistos.includes(amb)) vistos.push(amb);
+    });
+    return vistos;
+}
+
 function renderizarItens() {
     const tbody = document.getElementById('orcItensTbody');
     if (!tbody) return;
+
+    atualizarDatalistAmbientes();
 
     if (orcState.itens.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;">Nenhum item adicionado</td></tr>';
         return;
     }
 
-    tbody.innerHTML = orcState.itens.map((it, idx) => {
-        const subtotal = (Number(it.quantidade) || 0) * (Number(it.preco_unitario) || 0);
-        return `
-            <tr>
-                <td>
-                    <button class="btn-icone" onclick="moverItem(${idx}, -1)" title="Subir" ${idx === 0 ? 'disabled' : ''}>
-                        <i class="fas fa-arrow-up"></i>
-                    </button>
-                    <button class="btn-icone" onclick="moverItem(${idx}, 1)" title="Descer" ${idx === orcState.itens.length - 1 ? 'disabled' : ''}>
-                        <i class="fas fa-arrow-down"></i>
-                    </button>
-                </td>
-                <td>${it.sku || '-'}</td>
-                <td>${it.nome || '-'}</td>
-                <td>${it.categoria || '-'}</td>
-                <td>${it.fornecedor || '-'}</td>
-                <td>
-                    <input type="number" min="1" step="1" value="${it.quantidade}" style="width:70px;"
-                           onchange="alterarQuantidade(${idx}, this.value)"/>
-                </td>
-                <td>${formatarMoeda(it.preco_unitario)}</td>
-                <td>${formatarMoeda(subtotal)}</td>
-                <td>
-                    <button class="btn-icone" onclick="removerItem(${idx})" title="Remover" style="color:#c62828;">
-                        <i class="fas fa-trash"></i>
-                    </button>
+    const ambientes = ordemAmbientes();
+    const linhas = [];
+    // Renderiza cada ambiente como uma seção com cabeçalho + linhas de itens.
+    // A "ordem" exibida é contínua entre ambientes (1, 2, 3, ...), batendo com o PDF.
+    let numeroLinha = 1;
+    ambientes.forEach((ambiente) => {
+        const itensDoAmbiente = orcState.itens
+            .map((it, idx) => ({ it, idx }))
+            .filter(({ it }) => ((it.ambiente || '').trim() || '(Sem ambiente)') === ambiente);
+
+        linhas.push(`
+            <tr class="orc-ambiente-header">
+                <td colspan="9">
+                    <span class="orc-ambiente-nome">
+                        <i class="fas fa-folder-open"></i>
+                        <input type="text" class="orc-ambiente-edit" value="${escaparHtml(ambiente === '(Sem ambiente)' ? '' : ambiente)}"
+                               placeholder="(Sem ambiente)"
+                               onchange="renomearAmbiente('${escaparAspas(ambiente)}', this.value)" />
+                    </span>
+                    <span class="orc-ambiente-acoes">
+                        <button class="btn-icone" onclick="removerAmbiente('${escaparAspas(ambiente)}')" title="Remover ambiente e seus itens" style="color:#c62828;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </span>
                 </td>
             </tr>
-        `;
-    }).join('');
+        `);
+
+        itensDoAmbiente.forEach(({ it, idx }, posGrupo) => {
+            const subtotal = (Number(it.quantidade) || 0) * (Number(it.preco_unitario) || 0);
+            const primeiro = posGrupo === 0;
+            const ultimo = posGrupo === itensDoAmbiente.length - 1;
+            linhas.push(`
+                <tr>
+                    <td class="orc-col-ordem">
+                        <span class="orc-ordem-num">${String(numeroLinha++).padStart(2, '0')}</span>
+                        <button class="btn-icone" onclick="moverItemNoAmbiente(${idx}, -1)" title="Subir no ambiente" ${primeiro ? 'disabled' : ''}>
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                        <button class="btn-icone" onclick="moverItemNoAmbiente(${idx}, 1)" title="Descer no ambiente" ${ultimo ? 'disabled' : ''}>
+                            <i class="fas fa-arrow-down"></i>
+                        </button>
+                    </td>
+                    <td>${escaparHtml(it.sku || '-')}</td>
+                    <td>${escaparHtml(it.nome || '-')}</td>
+                    <td>
+                        <input type="text" value="${escaparHtml(it.cor || '')}" placeholder="—"
+                               onchange="alterarCampoItem(${idx}, 'cor', this.value)" />
+                    </td>
+                    <td>
+                        <input type="text" value="${escaparHtml(it.tamanho || '')}" placeholder="—"
+                               onchange="alterarCampoItem(${idx}, 'tamanho', this.value)" />
+                    </td>
+                    <td>
+                        <input type="number" min="1" step="1" value="${it.quantidade}" class="orc-input-qtd"
+                               onchange="alterarQuantidade(${idx}, this.value)"/>
+                    </td>
+                    <td>
+                        <input type="number" min="0" step="0.01" value="${Number(it.preco_unitario).toFixed(2)}" class="orc-input-valor"
+                               onchange="alterarPrecoUnitario(${idx}, this.value)" />
+                    </td>
+                    <td>${formatarMoeda(subtotal)}</td>
+                    <td>
+                        <button class="btn-icone" onclick="removerItem(${idx})" title="Remover item" style="color:#c62828;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `);
+        });
+    });
+
+    tbody.innerHTML = linhas.join('');
 }
 
-export function moverItem(idx, dir) {
-    const novoIdx = idx + dir;
-    if (novoIdx < 0 || novoIdx >= orcState.itens.length) return;
+// Usado apenas dentro de atributos inline onclick com aspas simples.
+function escaparAspas(valor) {
+    if (valor === null || valor === undefined) return '';
+    return String(valor).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+// Move um item dentro do seu próprio ambiente, preservando a posição
+// relativa dos outros ambientes no array global de itens.
+export function moverItemNoAmbiente(idx, dir) {
+    const alvo = orcState.itens[idx];
+    if (!alvo) return;
+    const ambienteAlvo = (alvo.ambiente || '').trim() || '(Sem ambiente)';
+
+    // Índices globais dos itens que pertencem ao mesmo ambiente, em ordem.
+    const indicesNoAmbiente = orcState.itens
+        .map((it, i) => ({ it, i }))
+        .filter(({ it }) => (((it.ambiente || '').trim() || '(Sem ambiente)') === ambienteAlvo))
+        .map(({ i }) => i);
+
+    const posNoAmbiente = indicesNoAmbiente.indexOf(idx);
+    const novaPos = posNoAmbiente + dir;
+    if (novaPos < 0 || novaPos >= indicesNoAmbiente.length) return;
+
+    const outroIdx = indicesNoAmbiente[novaPos];
     const tmp = orcState.itens[idx];
-    orcState.itens[idx] = orcState.itens[novoIdx];
-    orcState.itens[novoIdx] = tmp;
+    orcState.itens[idx] = orcState.itens[outroIdx];
+    orcState.itens[outroIdx] = tmp;
     renderizarItens();
 }
 
@@ -615,8 +751,45 @@ export function alterarQuantidade(idx, valor) {
     recalcularTotais();
 }
 
+export function alterarPrecoUnitario(idx, valor) {
+    const num = parseFloat(valor);
+    orcState.itens[idx].preco_unitario = Number.isFinite(num) && num >= 0 ? num : 0;
+    renderizarItens();
+    recalcularTotais();
+}
+
+export function alterarCampoItem(idx, campo, valor) {
+    if (!orcState.itens[idx]) return;
+    const permitidos = ['cor', 'tamanho', 'ambiente'];
+    if (!permitidos.includes(campo)) return;
+    orcState.itens[idx][campo] = (valor || '').toString();
+    if (campo === 'ambiente') renderizarItens();
+}
+
 export function removerItem(idx) {
     orcState.itens.splice(idx, 1);
+    renderizarItens();
+    recalcularTotais();
+}
+
+// Renomeia o ambiente de TODOS os itens do grupo (edição inline do cabeçalho).
+export function renomearAmbiente(antigo, novo) {
+    const novoNome = (novo || '').trim();
+    const antigoNome = antigo === '(Sem ambiente)' ? '' : antigo;
+    orcState.itens.forEach((it) => {
+        const atual = (it.ambiente || '').trim();
+        if (atual === antigoNome) it.ambiente = novoNome;
+    });
+    renderizarItens();
+}
+
+export function removerAmbiente(ambiente) {
+    const nome = ambiente === '(Sem ambiente)' ? '' : ambiente;
+    const qtd = orcState.itens.filter((it) => ((it.ambiente || '').trim() === nome)).length;
+    if (qtd === 0) return;
+    const ok = confirm(`Remover o ambiente "${ambiente}" e seus ${qtd} item(ns)?`);
+    if (!ok) return;
+    orcState.itens = orcState.itens.filter((it) => ((it.ambiente || '').trim() !== nome));
     renderizarItens();
     recalcularTotais();
 }
@@ -693,10 +866,11 @@ export function selecionarProduto(id, origem) {
             produto_id: p.id,
             nome: p.nome,
             sku: p.sku || '-',
-            categoria: p.categoria || '-',
-            fornecedor: p.fornecedor || '-',
             quantidade: 1,
-            preco_unitario: Number(p.preco_venda) || 0
+            preco_unitario: Number(p.preco_venda) || 0,
+            // Campos opcionais preenchidos já no orçamento; começam vazios no staging
+            cor: '',
+            tamanho: ''
         });
     }
     renderizarProdutosSelecionados();
@@ -771,8 +945,9 @@ function confirmarProdutosSelecionados() {
         alert('Nenhum produto selecionado. Adicione ao menos um produto à lista.');
         return;
     }
+    const ambiente = ambienteAtual();
     orcState.produtosSelecionados.forEach(sel => {
-        orcState.itens.push({ ...sel });
+        orcState.itens.push({ ...sel, ambiente });
     });
     orcState.produtosSelecionados = [];
     fecharModal('orcModalProduto');
@@ -782,16 +957,19 @@ function confirmarProdutosSelecionados() {
 
 // ====== Modal de produto customizado ======
 function abrirModalCustom() {
-    document.getElementById('orcCustomNome').value = '';
-    document.getElementById('orcCustomDescricao').value = '';
+    ['orcCustomCodigo','orcCustomNome','orcCustomDescricao','orcCustomCor','orcCustomTamanho']
+        .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     document.getElementById('orcCustomQtd').value = 1;
     document.getElementById('orcCustomPreco').value = 0;
     abrirModal('orcModalCustom');
 }
 
 function adicionarItemCustomizado() {
+    const codigo = document.getElementById('orcCustomCodigo').value.trim();
     const nome = document.getElementById('orcCustomNome').value.trim();
     const descricao = document.getElementById('orcCustomDescricao').value.trim();
+    const cor = document.getElementById('orcCustomCor').value.trim();
+    const tamanho = document.getElementById('orcCustomTamanho').value.trim();
     const qtd = parseInt(document.getElementById('orcCustomQtd').value) || 1;
     const preco = parseFloat(document.getElementById('orcCustomPreco').value) || 0;
     if (!nome) { alert('Informe o nome do item'); return; }
@@ -801,9 +979,10 @@ function adicionarItemCustomizado() {
         nome: nome,
         nome_customizado: nome,
         descricao_customizada: descricao,
-        sku: '-',
-        categoria: 'Personalizado',
-        fornecedor: '-',
+        sku: codigo || '-',
+        ambiente: ambienteAtual(),
+        cor: cor,
+        tamanho: tamanho,
         quantidade: qtd,
         preco_unitario: preco
     });
@@ -864,10 +1043,12 @@ export async function selecionarBase(id) {
             produto_id: it.produto_id,
             nome: it.produto_nome || it.nome_customizado,
             nome_customizado: it.produto_id ? null : it.nome_customizado,
+            codigo_customizado: it.produto_id ? null : (it.codigo_customizado || ''),
             descricao_customizada: it.descricao_customizada,
             sku: it.sku || '-',
-            categoria: it.categoria || '-',
-            fornecedor: '-',
+            ambiente: it.ambiente || '',
+            tamanho: it.tamanho || '',
+            cor: it.cor || '',
             quantidade: Number(it.quantidade) || 1,
             preco_unitario: Number(it.preco_unitario) || 0
         }));
@@ -917,7 +1098,11 @@ async function salvarOrcamento() {
         itens: orcState.itens.map(it => ({
             produto_id: it.produto_id,
             nome_customizado: it.produto_id ? null : (it.nome_customizado || it.nome),
+            codigo_customizado: it.produto_id ? null : ((it.codigo_customizado || (it.sku && it.sku !== '-' ? it.sku : '')) || null),
             descricao_customizada: it.descricao_customizada || null,
+            ambiente: (it.ambiente || '').trim() || null,
+            tamanho: (it.tamanho || '').trim() || null,
+            cor: (it.cor || '').trim() || null,
             quantidade: it.quantidade,
             preco_unitario: it.preco_unitario
         }))
@@ -1033,6 +1218,30 @@ function extrairNomeArquivo(contentDisposition) {
     try { return decodeURIComponent(match[1]); } catch (_) { return match[1]; }
 }
 
+function agruparItensPorAmbientePDF(itens) {
+    const ordem = [];
+    const grupos = new Map();
+    (itens || []).forEach((it) => {
+        const chave = (it.ambiente && String(it.ambiente).trim()) || '';
+        if (!grupos.has(chave)) {
+            grupos.set(chave, []);
+            ordem.push(chave);
+        }
+        grupos.get(chave).push(it);
+    });
+    return ordem.map((nome) => ({ nome, itens: grupos.get(nome) }));
+}
+
+function escaparHtmlPDF(valor) {
+    if (valor === null || valor === undefined) return '';
+    return String(valor)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function abrirDocumentoImpressao({ orcamento, itens, empresa }) {
     const subtotal = (itens || []).reduce((s, it) => s + (Number(it.subtotal) || 0), 0);
     let descPerc = Number(orcamento.desconto) || 0;
@@ -1041,61 +1250,106 @@ function abrirDocumentoImpressao({ orcamento, itens, empresa }) {
     const descValor = subtotal * (descPerc / 100);
     const total = subtotal - descValor;
 
-    const qtdItens = (itens || []).length;
-    const itensRows = (itens || []).map((it, i) => `
-        <tr>
-            <td>${String(i + 1).padStart(3, '0')}</td>
-            <td>${it.produto_nome || it.nome_customizado || '-'}</td>
-            <td style="text-align:center;">${it.quantidade}</td>
-            <td style="text-align:right;">${formatarMoeda(it.preco_unitario)}</td>
-            <td style="text-align:right;">${formatarMoeda(it.subtotal)}</td>
-        </tr>
-    `).join('');
+    const grupos = agruparItensPorAmbientePDF(itens);
 
-    // Quando houver poucos itens, completa com linhas em branco até um teto
-    // que caiba em uma página A4; se houver muitos itens, não adiciona linhas vazias
-    // e deixa o fluxo natural quebrar em múltiplas páginas.
-    const LIMITE_UMA_PAGINA = 22;
-    const linhasVazias = qtdItens <= LIMITE_UMA_PAGINA ? (LIMITE_UMA_PAGINA - qtdItens) : 0;
-    const vazias = Array.from({ length: linhasVazias }, () => '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>').join('');
+    // Monta as linhas de itens agrupadas por ambiente; numeração contínua (1,2,3...)
+    // para bater com a aparência da referência do cliente.
+    let numeroLinha = 0;
+    const linhasItensHTML = grupos.map((grupo) => {
+        const cabecalhoAmbiente = grupo.nome
+            ? `<tr class="grupo-ambiente"><td colspan="8">${escaparHtmlPDF(grupo.nome.toUpperCase())}</td></tr>`
+            : '';
+        const linhas = grupo.itens.map((it) => {
+            numeroLinha += 1;
+            return `
+                <tr>
+                    <td style="text-align:center;">${numeroLinha}</td>
+                    <td>${escaparHtmlPDF(it.sku || '-')}</td>
+                    <td>${escaparHtmlPDF(it.produto_nome || it.nome_customizado || '-')}</td>
+                    <td style="text-align:center;">${escaparHtmlPDF(it.cor || '')}</td>
+                    <td style="text-align:center;">${escaparHtmlPDF(it.tamanho || '')}</td>
+                    <td style="text-align:center;">${it.quantidade}</td>
+                    <td style="text-align:right;">${formatarMoeda(it.preco_unitario)}</td>
+                    <td style="text-align:right;">${formatarMoeda(it.subtotal)}</td>
+                </tr>
+            `;
+        }).join('');
+        return cabecalhoAmbiente + linhas;
+    }).join('');
+
+    const itensVaziosMsg = (itens || []).length === 0
+        ? '<tr><td colspan="8" style="text-align:center;color:#999;padding:8px;">Nenhum item cadastrado</td></tr>'
+        : '';
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Orçamento ${orcamento.numero || orcamento.id}</title>
+<title>Orçamento ${escaparHtmlPDF(orcamento.numero || orcamento.id)}</title>
 <style>
-    @page { size: A4; margin: 8mm; }
+    @page { size: A4; margin: 10mm; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Arial, sans-serif; color: #1f3a5f; }
-    .doc { width: 194mm; margin: 0 auto; padding: 4mm 0; }
+    .doc { width: 190mm; margin: 0 auto; padding: 4mm 0; }
 
-    .topo { display: flex; border: 2px solid #1f3a5f; }
-    .topo .logo { flex: 2; padding: 8px; border-right: 1px solid #1f3a5f; text-align: center; }
-    .topo .logo .title { font-size: 18px; font-weight: 800; }
-    .topo .logo .sub { font-size: 9px; color: #555; margin-top: 2px; }
-    .topo .contato { flex: 2; padding: 8px; font-size: 11px; border-right: 1px solid #1f3a5f; line-height: 1.35; }
-    .topo .numero { flex: 1; padding: 8px; text-align: center; }
-    .topo .numero .lbl { font-weight: 700; font-size: 12px; }
-    .topo .numero .num { margin-top: 4px; padding: 6px; border: 1px solid #1f3a5f; font-weight: 700; font-size: 13px; }
+    .topo { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+    .topo .logo-box {
+        flex: 0 0 260px;
+        height: 90px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        overflow: hidden;
+        position: relative;
+    }
+    .topo .logo-box img {
+        width: 290%;
+        height: 290%;
+        object-fit: stretch;
+        object-position: center center;
+        display: block;
+        /* Zoom no SVG para compensar o padding transparente interno;
+           overflow: hidden acima recorta o excedente. */
+        transform: scale(1);
+        transform-origin: center center;
+        margin-top: -75px;  /* sobe a logo para dentro do topo — ajuste fino aqui */
+        filter: brightness(0) saturate(100%) invert(16%) sepia(47%) saturate(1500%) hue-rotate(190deg) brightness(93%) contrast(95%);
+    }
+    .topo .logo-box .logo-fallback { font-size: 24px; font-weight: 800; color: #1f3a5f; letter-spacing: .5px; }
+    .topo .titulo { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .topo .titulo h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 3px; color: #1f3a5f; }
+    .topo .titulo .barra { width: 100%; height: 6px; background: #1f3a5f; margin-top: 6px; }
+    .topo .numero { flex: 0 0 150px; border: 1.5px solid #1f3a5f; display: flex; flex-direction: column; }
+    .topo .numero .lbl { background: #1f3a5f; color: #fff; text-align: center; padding: 3px 6px; font-size: 11px; font-weight: 700; }
+    .topo .numero .num { padding: 6px; text-align: center; font-weight: 700; font-size: 13px; background: #ffe4b5; }
 
-    .cliente-box { border: 2px solid #1f3a5f; border-top: none; padding: 6px 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px; font-size: 11px; }
-    .cliente-box .row { display: flex; gap: 4px; }
-    .cliente-box .row .label { font-weight: 700; min-width: 95px; text-align: right; }
-    .cliente-box .row .val { flex: 1; border-bottom: 1px solid #1f3a5f; }
+    .empresa-info { display: flex; gap: 24px; font-size: 10.5px; padding: 4px 0; border-top: 1px solid #dfe4ec; border-bottom: 1px solid #dfe4ec; margin-bottom: 6px; }
+    .empresa-info > div > strong { margin-right: 4px; }
 
-    table.items { width: 100%; border-collapse: collapse; border: 2px solid #1f3a5f; }
-    table.items thead { display: table-header-group; }
-    table.items thead th { background: #eaf1fb; color: #1f3a5f; font-size: 11px; padding: 4px; border: 1px solid #1f3a5f; }
+    .faixa-secao { background: #dfe4ec; color: #1f3a5f; font-weight: 700; padding: 4px 8px; font-size: 11px; letter-spacing: .5px; border-top: 1px solid #1f3a5f; border-bottom: 1px solid #1f3a5f; text-transform: uppercase; }
+
+    .cliente-box { padding: 5px 8px 8px 8px; font-size: 10.5px; line-height: 1.55; }
+    .cliente-box .linha { display: flex; gap: 6px; }
+    .cliente-box .lbl { font-weight: 700; }
+
+    table.items { width: 100%; border-collapse: collapse; margin-top: 4px; }
+    table.items thead { display: table-header-group; background: #dfe4ec; }
+    table.items thead th { color: #1f3a5f; font-size: 10.5px; padding: 5px 4px; border: 1px solid #1f3a5f; text-transform: uppercase; }
     table.items tbody td { font-size: 10px; padding: 3px 5px; border: 1px solid #b9c4d6; height: 16px; }
+    table.items tr.grupo-ambiente td { background: #1f3a5f; color: #fff; font-weight: 700; padding: 5px 8px; font-size: 10.5px; letter-spacing: 1px; border: 1px solid #1f3a5f; }
 
-    .resumo { display: grid; grid-template-columns: 2fr 1fr; border: 2px solid #1f3a5f; border-top: none; page-break-inside: avoid; }
-    .resumo .obs { padding: 8px; border-right: 1px solid #1f3a5f; font-size: 10px; }
-    .resumo .totais { display: grid; grid-template-columns: 1fr 1fr; font-size: 11px; }
-    .resumo .totais .cel { padding: 4px 8px; border-bottom: 1px solid #b9c4d6; }
-    .resumo .totais .cel.lbl { text-align: right; font-weight: 700; border-right: 1px solid #b9c4d6; background: #f5f8fc; }
-    .resumo .totais .cel:last-child, .resumo .totais .cel:nth-last-child(2) { border-bottom: none; }
+    table.totais { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    table.totais td { padding: 5px 10px; font-size: 11px; border: 1px solid #b9c4d6; }
+    table.totais td.lbl { text-align: right; font-weight: 700; background: #f5f8fc; width: 70%; }
+    table.totais td.val { text-align: right; width: 30%; }
+    table.totais tr.final td { background: #1f3a5f; color: #fff; font-size: 12.5px; }
+
+    .rodape { margin-top: 10px; font-size: 10.5px; color: #333; }
+    .rodape .entrega { margin-bottom: 6px; }
+    .rodape .obs { white-space: pre-wrap; }
+    .rodape .assinatura { margin-top: 14px; font-weight: 700; }
 
     .actions { text-align: right; margin: 10px; }
     .actions button { padding: 6px 12px; cursor: pointer; font-size: 12px; }
@@ -1103,6 +1357,7 @@ function abrirDocumentoImpressao({ orcamento, itens, empresa }) {
     @media print {
         .actions { display: none; }
         .doc { padding: 0; }
+        table.items tbody tr, tr.grupo-ambiente { page-break-inside: avoid; }
     }
 </style>
 </head>
@@ -1113,58 +1368,76 @@ function abrirDocumentoImpressao({ orcamento, itens, empresa }) {
     </div>
     <div class="doc">
         <div class="topo">
-            <div class="logo">
-                <div class="title">${(empresa.nome_fantasia || 'IDEART').toUpperCase()}</div>
-                <div class="sub">${empresa.razao_social || ''}</div>
+            <div class="logo-box">
+                <img src="/images/ideart-logo.svg" alt="${escaparHtmlPDF(empresa.nome_fantasia || 'Ideart')}"
+                     onerror="if(this.src.endsWith('.svg')){this.src='/images/ideart-logo.png';}else{this.style.display='none';this.nextElementSibling.style.display='block';}" />
+                <div class="logo-fallback" style="display:none;">${escaparHtmlPDF((empresa.nome_fantasia || 'IDEART').toUpperCase())}</div>
             </div>
-            <div class="contato">
-                <div><strong>ENDEREÇO:</strong> ${[empresa.endereco, empresa.cidade, empresa.estado].filter(Boolean).join(' - ')}</div>
-                <div><strong>TELEFONE:</strong> ${empresa.telefone || ''}</div>
-                <div><strong>E-MAIL:</strong> ${empresa.email || ''}</div>
+            <div class="titulo">
+                <h1>ORÇAMENTO</h1>
+                <div class="barra"></div>
             </div>
             <div class="numero">
-                <div class="lbl">ORÇAMENTO Nº</div>
-                <div class="num">${orcamento.numero || orcamento.id}</div>
+                <div class="lbl">ORÇAMENTO Nº.</div>
+                <div class="num">${escaparHtmlPDF(orcamento.numero || `#${orcamento.id}`)}</div>
             </div>
         </div>
 
+        <div class="empresa-info">
+            <div><strong>CNPJ:</strong>${escaparHtmlPDF(empresa.cnpj || '-')}</div>
+            <div><strong>TELEFONE:</strong>${escaparHtmlPDF(empresa.telefone || '-')}</div>
+            <div><strong>E-MAIL:</strong>${escaparHtmlPDF(empresa.email || '-')}</div>
+            <div><strong>DATA:</strong>${escaparHtmlPDF(formatarData(orcamento.data_criacao))}</div>
+        </div>
+
+        <div class="faixa-secao">Dados do Cliente</div>
         <div class="cliente-box">
-            <div class="row"><div class="label">Nome:</div><div class="val">${orcamento.cliente_nome || ''}</div></div>
-            <div class="row"><div class="label">Data:</div><div class="val">${formatarData(orcamento.data_criacao)}</div></div>
-            <div class="row"><div class="label">Email:</div><div class="val">${orcamento.cliente_email || ''}</div></div>
-            <div class="row"><div class="label">Cidade/Estado:</div><div class="val">${[orcamento.cliente_cidade, orcamento.cliente_estado].filter(Boolean).join(' / ')}</div></div>
-            <div class="row"><div class="label">Telefone:</div><div class="val">${orcamento.cliente_telefone || ''}</div></div>
-            <div class="row"><div class="label">Profissional:</div><div class="val">${orcamento.profissional_nome || '-'}</div></div>
+            <div class="linha"><span class="lbl">CLIENTE:</span><span>${escaparHtmlPDF(orcamento.cliente_nome || '-')}</span></div>
+            <div class="linha"><span class="lbl">CPF/CNPJ:</span><span>${escaparHtmlPDF(orcamento.cliente_cpf || orcamento.cliente_cnpj || '')}</span></div>
+            <div class="linha"><span class="lbl">ENDEREÇO:</span><span>${escaparHtmlPDF([orcamento.cliente_endereco, orcamento.cliente_cidade, orcamento.cliente_estado].filter(Boolean).join(', ') || '-')}</span></div>
+            <div class="linha"><span class="lbl">TELEFONE:</span><span>${escaparHtmlPDF(orcamento.cliente_telefone || '-')}</span></div>
+            <div class="linha"><span class="lbl">E-MAIL:</span><span>${escaparHtmlPDF(orcamento.cliente_email || '-')}</span></div>
         </div>
 
         <table class="items">
             <thead>
                 <tr>
-                    <th style="width:52px;">Código</th>
-                    <th>Produto</th>
-                    <th style="width:70px;">Quantidade</th>
-                    <th style="width:90px;">Valor Unitário</th>
-                    <th style="width:90px;">Valor Total</th>
+                    <th style="width:34px;">Item</th>
+                    <th style="width:82px;">Código</th>
+                    <th>Descrição do Produto</th>
+                    <th style="width:68px;">Cor</th>
+                    <th style="width:68px;">Tamanho</th>
+                    <th style="width:44px;">Qtd.</th>
+                    <th style="width:82px;">Vl. Unit.</th>
+                    <th style="width:82px;">Vl. Total</th>
                 </tr>
             </thead>
             <tbody>
-                ${itensRows}
-                ${vazias}
+                ${linhasItensHTML || itensVaziosMsg}
             </tbody>
         </table>
 
-        <div class="resumo">
-            <div class="obs">
-                <div><strong>Observações:</strong><br>${(orcamento.observacoes || '').replace(/\n/g,'<br>')}</div>
-                <div style="margin-top:14px;"><strong>Assinatura:</strong> ${orcamento.assinatura || '_________________________'}</div>
-            </div>
-            <div class="totais">
-                <div class="cel lbl">Desconto</div><div class="cel">${descPerc}%</div>
-                <div class="cel lbl">Total</div><div class="cel">${formatarMoeda(subtotal)}</div>
-                <div class="cel lbl">Total com desconto</div><div class="cel">${formatarMoeda(total)}</div>
-                <div class="cel lbl">Válido até</div><div class="cel">${formatarData(orcamento.data_validade)}</div>
-                <div class="cel lbl">Forma de Pagamento</div><div class="cel">${orcamento.forma_pagamento || '-'}</div>
-            </div>
+        <table class="totais">
+            <tr>
+                <td class="lbl">TOTAL DOS AMBIENTES:</td>
+                <td class="val">${formatarMoeda(subtotal)}</td>
+            </tr>
+            <tr>
+                <td class="lbl">DESCONTO (${descPerc}%):</td>
+                <td class="val">- ${formatarMoeda(descValor)}</td>
+            </tr>
+            <tr class="final">
+                <td class="lbl">ORÇAMENTO FINAL:</td>
+                <td class="val">${formatarMoeda(total)}</td>
+            </tr>
+        </table>
+
+        <div class="rodape">
+            <div class="entrega"><strong>PREVISÃO DE ENTREGA:</strong> 10 - 15 DIAS ÚTEIS</div>
+            <div><strong>Válido até:</strong> ${escaparHtmlPDF(formatarData(orcamento.data_validade))}
+                 &nbsp;&nbsp;<strong>Forma de pagamento:</strong> ${escaparHtmlPDF(orcamento.forma_pagamento || '-')}</div>
+            ${orcamento.observacoes ? `<div class="obs" style="margin-top:6px;"><strong>Observações:</strong><br>${escaparHtmlPDF(orcamento.observacoes)}</div>` : ''}
+            ${orcamento.assinatura ? `<div class="assinatura">Assinatura: ${escaparHtmlPDF(orcamento.assinatura)}</div>` : ''}
         </div>
     </div>
 </body>
@@ -1200,7 +1473,37 @@ function adicionarEstilosOrcamento() {
         .btn-icone:hover { background:#f0f4fb; }
         .btn-icone:disabled { opacity:.3; cursor:not-allowed; }
         .orc-itens-table th, .orc-itens-table td { padding:.5rem; font-size:.9rem; }
-        .orc-itens-table input[type=number] { padding:.3rem; border:1px solid #ddd; border-radius:4px; }
+        .orc-itens-table input[type=number], .orc-itens-table input[type=text] {
+            padding:.3rem; border:1px solid #ddd; border-radius:4px; width:100%;
+        }
+        .orc-itens-table .orc-input-qtd { width:70px; }
+        .orc-itens-table .orc-input-valor { width:110px; text-align:right; }
+        .orc-itens-table .orc-col-ordem { white-space:nowrap; display:flex; align-items:center; gap:.2rem; }
+        .orc-itens-table .orc-ordem-num { font-weight:700; color:var(--primary-blue); min-width:20px; }
+        .orc-itens-table tr.orc-ambiente-header td {
+            background: var(--primary-blue, #1f3a5f);
+            color:#fff;
+            padding: .45rem .75rem;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:.5rem;
+        }
+        .orc-itens-table tr.orc-ambiente-header .orc-ambiente-nome { display:flex; align-items:center; gap:.5rem; flex:1; }
+        .orc-itens-table tr.orc-ambiente-header input.orc-ambiente-edit {
+            background: rgba(255,255,255,.12);
+            color:#fff;
+            border:1px solid rgba(255,255,255,.35);
+            border-radius:4px;
+            padding:.25rem .5rem;
+            font-weight:700;
+            letter-spacing:.3px;
+            min-width:260px;
+        }
+        .orc-itens-table tr.orc-ambiente-header input.orc-ambiente-edit::placeholder { color: rgba(255,255,255,.7); }
+        .orc-itens-table tr.orc-ambiente-header .btn-icone { color:#fff !important; }
+        .orc-itens-table tr.orc-ambiente-header .btn-icone:hover { background: rgba(255,255,255,.15); }
+        .orc-ambiente-row-topo input[list] { padding:.5rem .6rem; border:1px solid #cdd6e3; border-radius:6px; font-size:.95rem; }
         .totals-box { margin-top:1rem; background:#f5f8fc; border-radius:8px; padding:1rem 1.5rem; display:flex; flex-direction:column; gap:.4rem; align-items:flex-end; }
         .totals-box > div { display:flex; gap:1rem; min-width:260px; justify-content:space-between; }
         .totals-box .total-final { border-top:2px solid var(--primary-blue); padding-top:.4rem; margin-top:.25rem; font-size:1.1rem; color: var(--primary-blue); }
@@ -1226,8 +1529,12 @@ window.recusarOrcamento = recusarOrcamento;
 window.deletarOrcamento = deletarOrcamento;
 window.exportarOrcamentoPDF = exportarOrcamentoPDF;
 window.exportarOrcamentoExcel = exportarOrcamentoExcel;
-window.moverItem = moverItem;
+window.moverItemNoAmbiente = moverItemNoAmbiente;
 window.alterarQuantidade = alterarQuantidade;
+window.alterarPrecoUnitario = alterarPrecoUnitario;
+window.alterarCampoItem = alterarCampoItem;
+window.renomearAmbiente = renomearAmbiente;
+window.removerAmbiente = removerAmbiente;
 window.removerItem = removerItem;
 window.selecionarProduto = selecionarProduto;
 window.selecionarBase = selecionarBase;
